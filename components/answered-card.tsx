@@ -180,6 +180,14 @@ export function AnsweredCard({ answer: savedAnswer, input }: { answer: QuestionA
 			{answer.dontKnow && isQuiz && (
 				<div className="mt-2 text-sm text-muted-foreground">Answered “I don't know”.</div>
 			)}
+			{answer.workingImage && (
+				<details className="mt-3" data-testid="answered-working">
+					<summary className="cursor-pointer text-xs font-medium text-muted-foreground">Your handwritten working</summary>
+					{/* eslint-disable-next-line @next/next/no-img-element */}
+					<img src={`data:${answer.workingImage.mimeType};base64,${answer.workingImage.data}`}
+						alt="Your handwritten solution on the question" className="mt-2 h-auto w-full rounded-lg border" />
+				</details>
+			)}
 
 			{(answer.thinking ?? answer.note) && (
 				/* The SAME unified row (owner round, 2026-10-05): the quiz answer's

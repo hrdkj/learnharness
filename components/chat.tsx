@@ -47,6 +47,7 @@ import {
 	type ChatSettings,
 	type LhMessage,
 	type ModelSlotName,
+	type QuestionWorkingImage,
 } from "@/src/core";
 import { PlanBlock, PlanPopup, latestTree } from "@/components/plan-block";
 import { PlanMarginalia, planExists } from "@/components/plan-window";
@@ -57,7 +58,7 @@ import type { PlanBlockData } from "@/src/core";
 import { QuestionDock } from "@/components/question-dock";
 import { SessionFind } from "@/components/session-find";
 import { SessionMessageNavigation } from "@/components/session-navigation";
-import { PracticeDock } from "@/components/practice-dock";
+import { PracticeDock, type PracticeDockProps } from "@/components/practice-dock";
 import { ThinkingCard, type PracticeThinkingData } from "@/components/practice-cards";
 import { GraphContextCard, type GraphContextData } from "@/components/graph-context-card";
 import { TopBar } from "@/components/top-bar";
@@ -498,10 +499,10 @@ export function Chat({
 	// the dock stays mounted (the problem is still active until the agent
 	// concludes).
 	const submitThinking = useCallback(
-		(text: string) => {
+		async (text: string, workingImage?: QuestionWorkingImage) => {
 			const problem = activeProblemRef.current;
-			if (!problem) return;
-			void send({ type: "thinking", problemCallId: problem.toolCallId, text });
+			if (!problem || busyRef.current) return false;
+			return send({ type: "thinking", problemCallId: problem.toolCallId, text, ...(workingImage ? { workingImage } : {}) });
 		},
 		[send],
 	);
@@ -1398,7 +1399,7 @@ export function Chat({
 				</TopBar>
 
 				<SessionFind scopeRef={sessionFindScopeRef} scrollContextRef={scrollContextRef} />
-				<div ref={sessionFindScopeRef} className="relative flex min-h-0 flex-1">
+				<div ref={sessionFindScopeRef} data-question-writing-surface="" className="relative flex min-h-0 flex-1">
 				<Conversation className="h-full min-w-0 flex-1" initial="instant" contextRef={scrollContextRef}>
 					<SessionMessageNavigation />
 					<ConversationContent className="min-h-full gap-0 p-0">
@@ -1963,8 +1964,8 @@ function DockOverlay({
 	 *  {toolCallId, input} — dock ownership exactly like a pending
 	 *  question (the composer is replaced); null in teaching sessions. */
 	practice: { toolCallId: string; input: unknown } | null;
-	/** (commit, text) — the practice dock's two submit lanes. */
-	onSubmitThinking: (text: string) => void;
+	/** The practice dock's thinking text and optional handwriting snapshot. */
+	onSubmitThinking: PracticeDockProps["onSubmit"];
 	/** Teach-phase pending question: arrives collapsed behind the reveal button (W5). */
 	requiresReveal: boolean;
 	/** The reading-thinking draft (owner 2026-10-03) — owned by ChatView so
@@ -2405,6 +2406,7 @@ function DockOverlay({
 									initialDraft={initialQuestionDraft}
 									onSaveDraft={onSaveQuestionDraft}
 									onEscape={dictationCancel}
+									dictationSlot={dictationSlot}
 									dictationClaim={!revealPending}
 									compactionRunning={compactionRunning}
 								/>
@@ -2419,6 +2421,7 @@ function DockOverlay({
 									}}
 									onSubmit={onSubmitThinking}
 									onEscape={dictationCancel}
+									dictationSlot={dictationSlot}
 									compactionRunning={compactionRunning}
 								/>
 							) : (

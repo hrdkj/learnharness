@@ -25,7 +25,7 @@ import {
 	type FauxResponseStep,
 	type TranscriptContext,
 } from "@earendil-works/pi-ai";
-import type { PiEngine } from "../src/agent/models.ts";
+import { piModels, type PiEngine } from "../src/agent/models.ts";
 import { createPracticeAgent } from "../src/agent/teacher-agent.ts";
 import { handleChatRequest } from "../src/server/chat-handler.ts";
 import { runningTurn } from "../src/server/turn-runs.ts";
@@ -132,6 +132,49 @@ function scripted(steps: FauxResponseStep[]): { engine: PiEngine; calls: string[
 const lastSaw = (calls: string[], needle: string) => calls[calls.length - 1]!.includes(needle);
 
 describe("practice flow (scripted model)", () => {
+	it("a handwriting submission reaches the practice model and saves one snapshot per send", async () => {
+		const chat = createPracticeChat("Test: practice handwritten working");
+		const { engine, calls } = scripted([
+			() => fauxAssistantMessage([fauxToolCall("problem", POSE, { id: "call-writing" })], { stopReason: "toolUse" }),
+			() => fauxAssistantMessage([fauxText("Continue with the next step.")]),
+			() => fauxAssistantMessage([fauxText("That completes the argument.")]),
+		]);
+		const factory = practiceFactory(chat.id, engine);
+		await drainTurn(post(chat.id, { type: "text", text: "practice" }), factory);
+		const vision = piModels().getModels("openrouter").find(model => model.input.includes("image"));
+		assert.ok(vision);
+		chatStore.saveSettings(chat.id, { model: { provider: "openrouter", id: vision.id } });
+		const workingImage = { mimeType: "image/png", data: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==" };
+		for (const text of ["", "Now the subgroup has order p."]) {
+			await drainTurn(post(chat.id, { type: "thinking", problemCallId: "call-writing", text, workingImage }), factory);
+			assert.ok(lastSaw(calls, '"type":"image"'), "the model receives native image content");
+			assert.ok(lastSaw(calls, workingImage.data));
+			assert.ok(lastSaw(calls, text));
+		}
+		const messages = chatStore.getChat(chat.id)!.messages;
+		const submissions = messages.filter(m => m.role === "custom" && m.customType === "practice-thinking");
+		assert.equal(submissions.length, 2);
+		for (const submission of submissions) assert.deepEqual((submission as { details: { workingImage: unknown } }).details.workingImage, workingImage);
+		assert.equal(activeProblemOf(messages)?.toolCallId, "call-writing");
+	});
+
+	it("a text-only model refuses practice handwriting before appending it", async () => {
+		const chat = createPracticeChat("Test: practice handwriting model capability");
+		const { engine } = scripted([
+			() => fauxAssistantMessage([fauxToolCall("problem", POSE, { id: "call-writing-refused" })], { stopReason: "toolUse" }),
+		]);
+		const factory = practiceFactory(chat.id, engine);
+		await drainTurn(post(chat.id, { type: "text", text: "practice" }), factory);
+		const textOnly = piModels().getModels("openrouter").find(model => !model.input.includes("image"));
+		assert.ok(textOnly);
+		chatStore.saveSettings(chat.id, { model: { provider: "openrouter", id: textOnly.id } });
+		const before = chatStore.getChat(chat.id)!.messages;
+		const response = await handleChatRequest(post(chat.id, { type: "thinking", problemCallId: "call-writing-refused", text: "",
+			workingImage: { mimeType: "image/png", data: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==" } }), factory);
+		assert.equal(response.status, 400);
+		assert.match(await response.text(), /model cannot read images/);
+		assert.deepEqual(chatStore.getChat(chat.id)!.messages, before);
+	});
 	it("pose → thinking commit → conclude + reveal; the pose ack persists and owes nothing", async () => {
 		const chat = createPracticeChat("Test: practice groups");
 		const { engine, calls } = scripted([

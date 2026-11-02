@@ -44,6 +44,7 @@ import {
 	THINKING_LABEL,
 } from "./contracts/chat.ts";
 import { compactAnswerForModel, type QuestionAnswerData } from "./question-core.ts";
+import { isQuestionWorkingImage, type QuestionWorkingImage } from "./question-writing.ts";
 import { activeCompactionOf, keptIndexFor } from "./compaction.ts";
 import { parseQuestionInput } from "./tool-parts.ts";
 
@@ -59,8 +60,9 @@ export const INTERRUPTED_TEXT =
  * The app's custom message (declaration-merged into pi-agent-core's
  * CustomAgentMessages below). Shaped like pi's own CustomMessage —
  * `content` is the MODEL-facing text (single-sourced in core/contracts,
- * never fake human speech), `details` is the UI payload (never
- * model-visible), `display` marks messages the UI renders (our projection
+ * never fake human speech), `details` is the UI payload (only a practice
+ * handwriting image is forwarded by toLlmMessages), `display` marks messages
+ * the UI renders (our projection
  * keys rendering on customType; the flag documents intent).
  */
 export interface LhMarkerMessage {
@@ -80,7 +82,7 @@ export interface LhMarkerMessage {
 	/** The model-facing text ("" for plan blocks — UI-only). */
 	content: string;
 	display: boolean;
-	/** The UI payload — per-customType, never model-visible. */
+	/** The UI payload; toLlmMessages also reads practice handwriting images. */
 	details: unknown;
 	timestamp: number;
 }
@@ -202,21 +204,29 @@ export function newUserSteer(text: string, id: string): LhMessage & UserMessage 
  *  compact learner-only record (compactAnswerForModel — the call's own
  *  arguments already carry the question/options/explanation/commitment;
  *  restating them doubled every answer's tokens), while `details` keeps
- *  the FULL graded QuestionAnswerData for the record and the UI. */
+ *  the graded QuestionAnswerData for the record and the UI. Handwriting
+ *  lives once in native image content; the view joins it to the answer. */
 export function newAnswerResult(
 	toolCallId: string,
 	toolName: string,
 	answer: unknown,
 ): LhMessage & ToolResultMessage {
+	const { workingImage, ...withoutImage } = answer as QuestionAnswerData;
+	const details = workingImage === undefined ? answer : withoutImage;
 	return {
 		id: newMessageId(),
 		role: "toolResult",
 		toolCallId,
 		toolName,
-		content: [{ type: "text", text: JSON.stringify(compactAnswerForModel(answer as QuestionAnswerData)) }],
+		content: [
+			{ type: "text", text: JSON.stringify(compactAnswerForModel(details as QuestionAnswerData)) },
+			...(isQuestionWorkingImage(workingImage) && !(details as QuestionAnswerData).dismissed
+				? [{ type: "image" as const, ...workingImage }] : []),
+		],
 		// 0.87.1 narrowed ToolResultMessage.details to JsonRepresentation —
 		// our payloads are JSON-safe answer structures, so the cast is honest.
-		details: answer as ToolResultMessage["details"],
+		// Store the PNG once, in native image content. The view joins it back.
+		details: details as ToolResultMessage["details"],
 		isError: false,
 		timestamp: Date.now(),
 	};
@@ -313,14 +323,14 @@ export function newGraphContextMessage(picks: readonly GraphContextPick[], chain
  *  content label is the single "Your thinking"; `details` keeps the raw
  *  payload for the transcript card. One problem may carry many
  *  submissions. */
-export function newThinkingMessage(problemCallId: string, text: string): LhMarkerMessage {
+export function newThinkingMessage(problemCallId: string, text: string, workingImage?: QuestionWorkingImage): LhMarkerMessage {
 	return {
 		id: newMessageId(),
 		role: "custom",
 		customType: "practice-thinking",
 		content: `${THINKING_LABEL}:\n${text}`,
 		display: true,
-		details: { problemCallId, text },
+		details: { problemCallId, text, ...(workingImage ? { workingImage: { ...workingImage } } : {}) },
 		timestamp: Date.now(),
 	};
 }
@@ -631,9 +641,14 @@ export function toLlmMessages(messages: readonly AgentMessage[]): Message[] {
 			// stored position. Without a resolved head, preserve the existing
 			// full-history fallback, including the summary text.
 			if (marker.customType === "compaction" && head !== null) continue;
+			const workingImage = marker.customType === "practice-thinking"
+				? (marker.details as { workingImage?: unknown } | null)?.workingImage : undefined;
 			out.push({
 				role: "user",
-				content: [{ type: "text", text: marker.content }],
+				content: [
+					{ type: "text", text: marker.content },
+					...(isQuestionWorkingImage(workingImage) ? [{ type: "image" as const, ...workingImage }] : []),
+				],
 			timestamp: marker.timestamp,
 			});
 			continue;

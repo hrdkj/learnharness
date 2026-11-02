@@ -109,6 +109,12 @@ function applyResult(part: LhViewPart, result: ToolResultMessage): void {
 	} else {
 		part.state = "output-available";
 		part.output = result.details;
+		if ((QUESTION_TOOLS as readonly string[]).includes(result.toolName)) {
+			const image = result.content.find((c) => c.type === "image");
+			if (image?.type === "image") {
+				part.output = { ...result.details as object, workingImage: { data: image.data, mimeType: image.mimeType } };
+			}
+		}
 	}
 }
 

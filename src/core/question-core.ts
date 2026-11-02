@@ -19,6 +19,7 @@
 
 import { Type, type Static } from "typebox";
 import { stripModelValueDebris } from "./value-debris.ts";
+import type { QuestionWorkingImage, QuestionWritingDraft } from "./question-writing.ts";
 
 // ─── shared types ───────────────────────────────────────────────────────────
 
@@ -434,6 +435,8 @@ export interface QuestionData {
  *  NO questionId (owner, tool-result diet 2026-10-02): it was the
  *  toolCallId restated — the toolResult message already carries it. */
 export interface QuestionAnswerData {
+	/** Screenshot of the question view with the learner's handwritten working. */
+	workingImage?: QuestionWorkingImage;
 	kind: QuestionKind;
 	/** The persisted call's tool NAME (owner, 2026-10-09): probe-phase
 	 *  calls are `probe`/`recall`, teach calls `quiz`/`explain` — the
@@ -483,6 +486,7 @@ export interface ClientQuestion {
 
 /** What the server passes to the bridge when the learner answers. */
 export interface AnswerRequest {
+	workingImage?: QuestionWorkingImage;
 	dontKnow?: boolean;
 	values?: string[]; // option values
 	other?: string; // ask "Other"
@@ -514,6 +518,7 @@ export const emptyDockSelection = (): DockSelection => ({ selected: new Set(), o
 /** In-memory submission snapshot: survives the question form's optimistic
  * unmount, never written to storage. Indices use the call's stable shuffle. */
 export interface QuestionFormDraft {
+	writing?: QuestionWritingDraft;
 	selection: DockSelection;
 	thinking: string;
 	other: string;
@@ -716,6 +721,7 @@ export function buildAnswer(qd: QuestionData, req: AnswerRequest, tool?: string)
 		answers: [],
 		thinking: req.thinking?.trim() || undefined,
 		readingThinking: req.readingThinking?.trim() || undefined,
+		...(req.workingImage ? { workingImage: req.workingImage } : {}),
 		answeredAt: new Date().toISOString(),
 	};
 	// resolve selected option values → OptionAnswer (in display order)

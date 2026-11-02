@@ -81,6 +81,13 @@ describe("PracticeDock", () => {
 // ── the transcript cards ─────────────────────────────────────────────────────
 
 describe("the practice transcript cards", () => {
+	it("ThinkingCard restores a submitted handwriting image without requiring text", () => {
+		const workingImage = { mimeType: "image/png" as const, data: "saved-image" };
+		const html = renderToStaticMarkup(<ThinkingCard data={{ problemCallId: "call_p1", text: "", workingImage }} />);
+		assert.match(html, /data-testid="practice-working"/);
+		assert.match(html, /src="data:image\/png;base64,saved-image"/);
+		assert.match(html, /Your handwritten working/);
+	});
 	it("ProblemCard: ALWAYS OPEN, the 'Problem' eyebrow + the statement — the commitment NEVER renders", () => {
 		const html = renderToStaticMarkup(
 			<ProblemCard

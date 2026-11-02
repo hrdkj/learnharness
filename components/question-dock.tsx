@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ArrowDownIcon, ChevronRightIcon, PlayIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { finishDictation, isDictationActive, joinDictation, useDictationTarget } from "@/components/dictation";
@@ -39,6 +39,7 @@ import {
 	type Phase3,
 } from "@/src/core";
 import { CONFIDENCE_COLORS, confidenceRailStyle } from "@/components/confidence-rail";
+import { QuestionWriting, WritingThinkingPortal } from "@/components/question-writing";
 
 /**
  * The question dock — a pending quiz/ask REPLACES the chat composer: the
@@ -97,6 +98,8 @@ export interface QuestionDockProps {
 	 *  and say so in the hint row. The server registry is the real gate;
 	 *  this is the affordance. */
 	compactionRunning?: boolean;
+	/** Reuse the page-owned Dictate control inside the writing overlay. */
+	dictationSlot?: ReactNode;
 }
 
 export function QuestionDock({
@@ -113,6 +116,7 @@ export function QuestionDock({
 	phase = "probe",
 	dictationClaim = true,
 	compactionRunning = false,
+	dictationSlot,
 }: QuestionDockProps) {
 	// The probe-phase names (owner, 2026-10-09) canonicalize onto their
 	// teach twins for every dock concern — parse dispatch, labels, kinds:
@@ -165,6 +169,7 @@ export function QuestionDock({
 					onEscape={onEscape}
 					dictationClaim={dictationClaim}
 					compactionRunning={compactionRunning}
+					dictationSlot={dictationSlot}
 				/>
 			</div>
 		</>
@@ -262,6 +267,7 @@ function QuestionDockForm({
 	onEscape,
 	dictationClaim = true,
 	compactionRunning = false,
+	dictationSlot,
 }: Omit<QuestionDockProps, "expanded" | "onExpand" | "reveal">) {
 	const kind = toolQuestionKind(toolName);
 
@@ -325,6 +331,15 @@ function QuestionDockForm({
 	const [thinking, setThinking] = useState(initialDraft?.thinking ?? "");
 	const [other, setOther] = useState(initialDraft?.other ?? "");
 	const [text, setText] = useState(initialDraft?.text ?? "");
+	const [writing, setWriting] = useState(initialDraft?.writing);
+	// Like the dictated text below, writing can change while submit awaits
+	// finishDictation(). Its continuation must read the current view and ink.
+	const writingRef = useRef(writing);
+	writingRef.current = writing;
+	const writingActive = useRef(false);
+	const [isWriting, setIsWriting] = useState(false);
+	const [writingThinkingTarget, setWritingThinkingTarget] = useState<HTMLDivElement | null>(null);
+	const setWritingActive = useCallback((active: boolean) => { writingActive.current = active; setIsWriting(active); }, []);
 	/* Refs MIRROR the two dictation-target fields ("nothing gets lost"
 	 * round, owner 2026-10-01): the run's flush lands via setState, which
 	 * a closure waiting through `await finishDictation()` cannot observe
@@ -374,7 +389,7 @@ function QuestionDockForm({
 			: sel.dontKnow || (sel.otherSelected && other.trim().length > 0) || sel.selected.size > 0;
 
 	const submit = () => {
-		if (!canSubmit || compactionRunning) return;
+		if (!canSubmit || compactionRunning || writingActive.current) return;
 		/* FINISH DICTATION FIRST (owner, 2026-10-01): Enter may arrive while
 		 * a run is live with reasoning still in Deepgram's hands. Stop the
 		 * run, let the last finals land in the target field, and only then
@@ -388,8 +403,9 @@ function QuestionDockForm({
 		void finishDictation().then(doSubmit);
 	};
 	const doSubmit = () => {
-		if (!canSubmit) return;
+		if (!canSubmit || writingActive.current) return;
 		const req: AnswerRequest = {
+			workingImage: writingRef.current?.image,
 			dontKnow: sel.dontKnow,
 			values: [...sel.selected].map((i) => qd.options[i]!.value),
 			other: sel.otherSelected ? other : undefined,
@@ -407,6 +423,7 @@ function QuestionDockForm({
 			other,
 			text: answerTextRef.current,
 			confidenceIndex: confIdx,
+			writing: writingRef.current,
 		});
 		onSubmit(buildAnswer(qd, req, toolName));
 	};
@@ -478,6 +495,7 @@ function QuestionDockForm({
 	useEffect(() => {
 		if (!active || rowCount === 0) return;
 		const onKeyDown = (e: KeyboardEvent) => {
+			if (writingActive.current) return;
 			const t = e.target as HTMLElement | null;
 			// A TYPING field is where keys mean text (owner round 4): the
 			// thinking/answer fields, search boxes, renames — never a range
@@ -559,10 +577,14 @@ function QuestionDockForm({
 
 	return (
 		<div ref={rootRef} data-testid="question-dock">
+			<div className="flex shrink-0 justify-end px-4 pt-2">
+				<QuestionWriting draft={writing} onChange={setWriting} onActiveChange={setWritingActive}
+					controls={dictationSlot} onThinkingTargetChange={setWritingThinkingTarget} />
+			</div>
 			{/* Question area — scrolls internally if very tall; the bottom row stays put.
 			    Capped by the measured column (--dock-max-h; the old fixed 55dvh cut
 			    long questions short — owner round, 2026-10-05). */}
-			<div data-dock-scroll-area="" data-session-find-root="" className="max-h-[var(--dock-max-h,55dvh)] overflow-y-auto px-4 pt-3">
+			<div data-dock-scroll-area="" data-session-find-root="" data-question-writing-content="" className="max-h-[var(--dock-max-h,55dvh)] overflow-y-auto px-4 pt-3">
 				<div className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
 					{toolName === "probe"
 						? "Probe"
@@ -835,6 +857,7 @@ function QuestionDockForm({
 			    send. Select modes get "Your thinking" (Enter makes a newline — it
 			    is for dumping, soon dictated; the button submits); text mode
 			    keeps "Your answer" with Enter-to-submit. */}
+			<WritingThinkingPortal target={writingThinkingTarget}>
 			<form
 				className="border-t border-border/60 p-1.5"
 				onSubmit={(e) => {
@@ -857,6 +880,7 @@ function QuestionDockForm({
 								setText(value);
 							}}
 							onKeyDown={(e) => {
+								if (writingActive.current && e.key === "Enter") { e.stopPropagation(); return; }
 								// Esc ends dictation (the dictate decisions: click-again
 								// or Esc) — stopPropagation claims it (keyboard wave
 								// A) so the window chain doesn't also abort a turn.
@@ -885,6 +909,7 @@ function QuestionDockForm({
 								setThinking(value);
 							}}
 							onKeyDown={(e) => {
+								if (writingActive.current && e.key === "Enter") { e.stopPropagation(); return; }
 								// Esc ends dictation (the dictate decisions: click-again
 								// or Esc) — stopPropagation claims it (keyboard wave
 								// A) so the window chain doesn't also abort a turn.
@@ -913,11 +938,11 @@ function QuestionDockForm({
 					)}
 					<div className="flex items-center justify-between gap-2 p-1">
 						<span aria-hidden className="pl-1.5 text-xs text-muted-foreground">
-								{compactionRunning ? "compacting session…" : "↵ submits · ⇧↵ newline"}
+								{isWriting ? "↵ newline" : compactionRunning ? "compacting session…" : "↵ submits · ⇧↵ newline"}
 						</span>
 						<Button
 							type="submit"
-							disabled={!canSubmit || compactionRunning}
+							disabled={!canSubmit || compactionRunning || isWriting}
 							className="ml-auto h-9 rounded-[6px] px-3.5 text-sm font-medium"
 						>
 							Submit answer
@@ -925,6 +950,7 @@ function QuestionDockForm({
 					</div>
 				</div>
 			</form>
+			</WritingThinkingPortal>
 		</div>
 	);
 }

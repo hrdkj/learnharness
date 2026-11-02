@@ -29,6 +29,7 @@
  */
 
 import type { QuestionAnswerData } from "./question-core.ts";
+import { isQuestionWorkingImage, type QuestionWorkingImage } from "./question-writing.ts";
 import type { LhMessage } from "./native-messages.ts";
 import {
 	activeProblemOf,
@@ -58,7 +59,7 @@ export type ChatInput =
 	 *  thinking on the ACTIVE problem — one lane (owner 2026-10-05):
 	 *  whether it claims an answer is read from the text. One
 	 *  problem may carry many submissions; each is its own turn. */
-	| { type: "thinking"; problemCallId: string; text: string }
+	| { type: "thinking"; problemCallId: string; text: string; workingImage?: QuestionWorkingImage }
 	/** The practice move-on signal (owner round 16): the learner's
 	 *  explicit go-ahead during the between-problems pause — the Next
 	 *  chip or Enter on an empty composer. Practice sessions only, and
@@ -176,6 +177,9 @@ export function parseChatInput(input: unknown): ChatInput {
 			if (typeof i.answer !== "object" || i.answer === null) {
 				throw new ChatInputError("answer input requires the graded answer object");
 			}
+			if ("workingImage" in i.answer && !isQuestionWorkingImage(i.answer.workingImage)) {
+				throw new ChatInputError("answer workingImage must be a PNG image");
+			}
 			return { type: "answer", toolCallId: i.toolCallId, answer: i.answer as QuestionAnswerData };
 		case "continue":
 			return { type: "continue" };
@@ -191,10 +195,14 @@ export function parseChatInput(input: unknown): ChatInput {
 			if (typeof i.problemCallId !== "string" || i.problemCallId.length === 0) {
 				throw new ChatInputError("thinking input requires problemCallId");
 			}
-			if (typeof i.text !== "string" || i.text.trim().length === 0) {
-				throw new ChatInputError("thinking input requires non-empty text");
+			if ("workingImage" in i && !isQuestionWorkingImage(i.workingImage)) {
+				throw new ChatInputError("thinking workingImage must be a PNG image");
 			}
-			return { type: "thinking", problemCallId: i.problemCallId, text: i.text };
+			if (typeof i.text !== "string" || (i.text.trim().length === 0 && !i.workingImage)) {
+				throw new ChatInputError("thinking input requires text or handwritten working");
+			}
+			return { type: "thinking", problemCallId: i.problemCallId, text: i.text,
+				...(i.workingImage ? { workingImage: i.workingImage as QuestionWorkingImage } : {}) };
 		case "next":
 			return { type: "next" };
 		default:
@@ -238,7 +246,7 @@ export function inputAppends(
 			if (!active || active.toolCallId !== input.problemCallId) {
 				throw new ChatInputError("thinking input targets no active problem");
 			}
-			return [...dismissalConclusion(record), newThinkingMessage(input.problemCallId, input.text)];
+			return [...dismissalConclusion(record), newThinkingMessage(input.problemCallId, input.text, input.workingImage)];
 		}
 		case "next": {
 			// Honest 400s, the thinking gate's discipline: the signal is a

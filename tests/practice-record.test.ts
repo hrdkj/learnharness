@@ -230,7 +230,28 @@ describe("the thinking input", () => {
 	});
 
 	it("empty text 400s at parse", () => {
-		assert.throws(() => parseChatInput({ type: "thinking", problemCallId: "c", text: "  " }), /non-empty/);
+		assert.throws(() => parseChatInput({ type: "thinking", problemCallId: "c", text: "  " }), /text or handwritten working/);
+	});
+
+	it("image-only and combined submissions survive persistence, history projection, and model conversion", () => {
+		const workingImage = { mimeType: "image/png" as const, data: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==" };
+		for (const text of ["", "The positive column contains 50 people."]) {
+			const input = parseChatInput({ type: "thinking", problemCallId: "call_p1", text, workingImage });
+			const appends = inputAppends({ messages: problemPose() }, input);
+			const restored = JSON.parse(JSON.stringify(appends)) as LhMessage[];
+			const projected = projectView(restored)[0]!.parts[0] as { data: unknown };
+			assert.deepEqual(projected.data, { problemCallId: "call_p1", text, workingImage });
+			const wire = toLlmMessages(asAgentMessages(restored));
+			assert.deepEqual(wire[0]!.content, [{ type: "text", text: `Your thinking:\n${text}` }, { type: "image", ...workingImage }]);
+			assert.equal(activeProblemOf([...problemPose(), ...restored])?.toolCallId, "call_p1");
+			assert.equal(appends.length, 1, "each submission saves a single snapshot");
+		}
+	});
+
+	it("malformed handwriting is rejected even when valid text accompanies it", () => {
+		for (const workingImage of [null, {}, { mimeType: "image/jpeg", data: "iVBORw0KGgo=" }, { mimeType: "image/png", data: "not a PNG" }]) {
+			assert.throws(() => parseChatInput({ type: "thinking", problemCallId: "call_p1", text: "my solution", workingImage }), /PNG image/);
+		}
 	});
 });
 

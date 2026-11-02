@@ -1,13 +1,16 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useRef, useState, type ReactNode } from "react";
 import { ChevronRightIcon } from "lucide-react";
 import { ToolContentResponse } from "@/components/ai-elements/message";
 import { Button } from "@/components/ui/button";
-import { joinDictation, useDictationTarget } from "@/components/dictation";
+import { finishDictation, joinDictation, useDictationTarget } from "@/components/dictation";
+import { isDictationActive } from "@/components/dictation-state";
+import { QuestionWriting, WritingThinkingPortal } from "@/components/question-writing";
 import { useEnterSubmits } from "@/components/enter-submits";
 import { PathInput } from "@/components/path-input";
 import { cn } from "@/lib/utils";
+import type { QuestionWorkingImage, QuestionWritingDraft } from "@/src/core";
 
 /**
  * The practice dock (practice sessions, owner design 2026-10-04): an
@@ -38,8 +41,9 @@ export interface PracticeDockProps {
 	/** Collapse state, owned by the DockOverlay. */
 	expanded: boolean;
 	onExpand: () => void;
-	/** text — POST {type:"thinking"} (one lane; the register is read from the text). */
-	onSubmit: (text: string) => void;
+	/** POST {type:"thinking"}; false means the input was not accepted. */
+	onSubmit: (text: string, workingImage?: QuestionWorkingImage) => Promise<boolean> | void;
+	dictationSlot?: ReactNode;
 	/** Escape in the thinking field stops dictation (threaded from the page). */
 	onEscape?: () => void;
 	/** Compaction is running for this chat (owner round 14): the thinking
@@ -49,8 +53,17 @@ export interface PracticeDockProps {
 	compactionRunning?: boolean;
 }
 
-export function PracticeDock({ problemCallId, input, expanded, onExpand, onSubmit, onEscape, compactionRunning = false }: PracticeDockProps) {
+export function PracticeDock({ problemCallId, input, expanded, onExpand, onSubmit, onEscape, dictationSlot, compactionRunning = false }: PracticeDockProps) {
 	const [thinking, setThinking] = useState("");
+	const [writing, setWriting] = useState<QuestionWritingDraft>();
+	const writingRef = useRef(writing);
+	writingRef.current = writing;
+	const writingActive = useRef(false);
+	const [isWriting, setIsWriting] = useState(false);
+	const [writingThinkingTarget, setWritingThinkingTarget] = useState<HTMLDivElement | null>(null);
+	const setWritingActive = useCallback((active: boolean) => { writingActive.current = active; setIsWriting(active); }, []);
+	const sendingRef = useRef(false);
+	const [sending, setSending] = useState(false);
 	// Ref MIRRORS the field ("nothing gets lost", the question-dock
 	// discipline): a submit resuming after `await finishDictation()` reads
 	// the tail, never a stale closure.
@@ -69,12 +82,30 @@ export function PracticeDock({ problemCallId, input, expanded, onExpand, onSubmi
 	);
 
 	const submit = () => {
-		if (compactionRunning) return;
-		const text = thinkingRef.current.trim();
-		if (text.length === 0) return;
-		thinkingRef.current = "";
-		setThinking("");
-		onSubmit(text);
+		if (compactionRunning || writingActive.current || sendingRef.current) return;
+		sendingRef.current = true;
+		setSending(true);
+		void (async () => {
+			try {
+				if (isDictationActive()) await finishDictation();
+				if (writingActive.current) return;
+				const text = thinkingRef.current.trim();
+				const workingImage = writingRef.current?.image;
+				if (!text && !workingImage) return;
+				const accepted = await onSubmit(text, workingImage);
+				// A rejected send keeps both channels. Do not erase text typed
+				// while the tutor was responding; the drawing stays editable.
+				if (accepted !== false && thinkingRef.current.trim() === text) {
+					thinkingRef.current = "";
+					setThinking("");
+				}
+			} catch {
+				// The session or DictationBar displays the failure; retain the draft.
+			} finally {
+				sendingRef.current = false;
+				setSending(false);
+			}
+		})();
 	};
 
 	/* ENTER SUBMITS FROM ANYWHERE (owner round 6, 2026-10-05): dictation
@@ -102,11 +133,15 @@ export function PracticeDock({ problemCallId, input, expanded, onExpand, onSubmi
 	/* ── the expanded form ── */
 	return (
 		<div data-testid="practice-dock" data-problem={problemCallId}>
+			<div className="flex shrink-0 justify-end px-4 pt-2">
+				<QuestionWriting draft={writing} onChange={setWriting} onActiveChange={setWritingActive}
+					controls={dictationSlot} onThinkingTargetChange={setWritingThinkingTarget} />
+			</div>
 			{/* The agent's half: the 'Problem' eyebrow (mirroring the quiz
 			    cards' label row — owner round, 2026-10-05) + the statement,
 			    markdown + LaTeX rendered, capped by the measured column
 			    (--dock-max-h; the old fixed 40vh cut long problems short). */}
-			<div data-dock-scroll-area="" className="max-h-[var(--dock-max-h,40vh)] overflow-y-auto px-4 pt-3 pb-2">
+			<div data-dock-scroll-area="" data-question-writing-content="" className="max-h-[var(--dock-max-h,40vh)] overflow-y-auto px-4 pt-3 pb-2">
 				<div className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">Problem</div>
 				<div className="lh-prose text-[15px]">
 					<ToolContentResponse>{input.statement}</ToolContentResponse>
@@ -115,6 +150,7 @@ export function PracticeDock({ problemCallId, input, expanded, onExpand, onSubmi
 
 			{/* The learner's half: Enter SENDS (owner round 2, 2026-10-05);
 			    Shift+Enter makes a newline — less to decide about. */}
+			<WritingThinkingPortal target={writingThinkingTarget}>
 			<div
 				data-testid="practice-thinking-field"
 				className="m-1.5 rounded-[10px] border border-border/70 bg-background/60 transition-colors focus-within:border-primary/50"
@@ -129,6 +165,7 @@ export function PracticeDock({ problemCallId, input, expanded, onExpand, onSubmi
 						setThinking(value);
 					}}
 					onKeyDown={(e) => {
+						if (writingActive.current && e.key === "Enter") { e.stopPropagation(); return; }
 						// Esc ends dictation — stopPropagation claims it (the
 						// keyboard machine) so the window chain doesn't also fire.
 						if (e.key === "Escape" && onEscape) {
@@ -155,12 +192,12 @@ export function PracticeDock({ problemCallId, input, expanded, onExpand, onSubmi
 				    field 10 − p-1 (4) = button 6. */}
 				<div className="flex items-center justify-between gap-2 p-1">
 					<span aria-hidden className="pl-1.5 text-xs text-muted-foreground">
-						{compactionRunning ? "compacting session…" : "↵ submits · ⇧↵ newline"}
+						{isWriting ? "↵ newline" : compactionRunning ? "compacting session…" : "↵ submits · ⇧↵ newline"}
 					</span>
 					<Button
 						type="button"
 						data-testid="practice-send"
-						disabled={thinking.trim().length === 0 || compactionRunning}
+						disabled={(!thinking.trim() && !writing?.image) || compactionRunning || isWriting || sending}
 						onClick={() => submit()}
 						className="ml-auto h-9 rounded-[6px] px-3.5 text-sm font-medium"
 					>
@@ -168,6 +205,7 @@ export function PracticeDock({ problemCallId, input, expanded, onExpand, onSubmi
 					</Button>
 				</div>
 			</div>
+			</WritingThinkingPortal>
 		</div>
 	);
 }

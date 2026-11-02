@@ -12,6 +12,36 @@ const dom = parseHTML("<html><body></body></html>");
 Object.assign(globalThis, { window: dom.window, document: dom.document, Element: dom.window.Element,
 	HTMLElement: dom.window.HTMLElement, IS_REACT_ACT_ENVIRONMENT: true });
 
+test("restored handwritten working submits with the selection and reopens in answer history", async () => {
+	const image = { mimeType: "image/png" as const, data: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==" };
+	const input = { question: "What is 2 + 2?", options: [{ label: "4" }, { label: "5" }], correctAnswer: "4", explanation: "Two pairs." };
+	const writing = { background: `data:image/png;base64,${image.data}`, width: 100, height: 100, strokes: [], image };
+	let answer: QuestionAnswerData | undefined;
+	const host = document.createElement("div"); document.body.append(host);
+	const root = createRoot(host);
+	try {
+		await act(async () => root.render(<QuestionDock toolName="probe" toolCallId="working-restored" input={input} expanded
+			dictationClaim={false} onExpand={() => {}} onSubmit={a => { answer = a; }}
+			initialDraft={{ writing, selection: { selected: new Set([0]), dontKnow: false, otherSelected: false }, thinking: "Two pairs", text: "", other: "", confidenceIndex: 2 }} />));
+		assert.match(host.querySelector('[data-testid="question-write"]')!.textContent!, /working attached/);
+		const capturedQuestion = host.querySelector('[data-question-writing-content]');
+		assert.ok(capturedQuestion);
+		assert.match(capturedQuestion.textContent!, /What is 2 \+ 2/);
+		assert.equal(capturedQuestion.querySelectorAll('[data-kbdrow]').length, 3, "every option, including I don't know, is in the capture");
+		assert.equal(capturedQuestion.querySelector('textarea, input[type="range"], form, [data-writing-controls]'), null,
+			"thinking, confidence, submission controls, and the Write button stay outside the image");
+		await act(async () => host.querySelector("form")!.dispatchEvent(new window.Event("submit", { bubbles: true, cancelable: true })));
+		assert.ok(answer);
+		assert.deepEqual(answer.workingImage, image);
+		assert.equal(answer.answers.length, 1);
+		assert.equal(answer.thinking, "Two pairs");
+		await act(async () => root.render(<AnsweredCard answer={answer!} input={input} />));
+		const saved = host.querySelector('[data-testid="answered-working"]');
+		assert.ok(saved);
+		assert.equal(saved.querySelector("img")!.getAttribute("src"), `data:image/png;base64,${image.data}`);
+	} finally { await act(async () => root.unmount()); host.remove(); }
+});
+
 test("actual select → submit → saved result → historical Why uses source data and presentation-only recovery", async () => {
 	const question = String.raw`Find $\\nabla f$ for $\begin{pmatrix}a&b\\c&d\end{pmatrix}$.`;
 	const label = String.raw`$\\nabla f$`;

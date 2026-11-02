@@ -30,6 +30,20 @@ import { dismissedAnswer } from "../src/core/question-core.ts";
 import { buildAnswer, type QuestionData } from "../src/core/question-core.ts";
 
 const realFetch = globalThis.fetch;
+
+describe("practice handwriting sends", () => {
+	it("shows the optimistic snapshot and removes it when the server refuses the send", async () => {
+		const workingImage = { mimeType: "image/png" as const, data: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==" };
+		const m = model({ fetch: async () => Response.json({ error: "The selected model cannot read images." }, { status: 400 }) });
+		const sending = m.send({ type: "thinking", problemCallId: "problem", text: "", workingImage });
+		const optimistic = m.getState().nativeMessages.at(-1) as { details: { workingImage: unknown } };
+		assert.deepEqual(optimistic.details.workingImage, workingImage);
+		assert.equal(await sending, false);
+		assert.equal(m.getState().nativeMessages.length, 0, "a rejected submission is not saved history");
+		assert.match(m.getState().error!.message, /cannot read images/);
+	});
+});
+
 afterEach(() => {
 	globalThis.fetch = realFetch;
 });

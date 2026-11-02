@@ -39,7 +39,7 @@ import { jobStore } from "../src/store/jobs.ts";
 import { buildAnswer, dismissedAnswer, normalizeOptions, resolveCorrect, type QuestionData } from "../src/core/question-core.ts";
 import { danglingQuestionOf, endsInDismissal, needsContinuation, newAnswerResult, newUserMessage } from "../src/core/native-messages.ts";
 import { projectView } from "../src/core/view.ts";
-import type { PiEngine } from "../src/agent/models.ts";
+import { piModels, type PiEngine } from "../src/agent/models.ts";
 import type { LhMessage } from "../src/core/native-messages.ts";
 
 // Route-level pin (the chat-birth-stamp pattern): the dismiss route's
@@ -275,6 +275,47 @@ after(() => {
 });
 
 describe("teacher chat flow (scripted model)", () => {
+	it("a text-only model refuses handwritten working before accepting the answer", async () => {
+		const { engine } = scriptedTeacher(defaultLesson);
+		const chat = createConfiguredChat("Test: handwriting model capability");
+		createdChats.push(chat.id);
+		await drainTurn(post(chat.id, { type: "text", text: "teach me the solar system" }), agentFactory(engine));
+		const textOnly = piModels().getModels("openrouter").find((model) => !model.input.includes("image"));
+		assert.ok(textOnly);
+		chatStore.saveSettings(chat.id, { model: { provider: "openrouter", id: textOnly.id } });
+		const before = chatStore.getChat(chat.id)!.messages;
+		const answer = {
+			...gradedAnswer(QUIZ_INPUT, ["Mercury"]),
+			workingImage: { mimeType: "image/png" as const, data: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==" },
+		};
+		const response = await handleChatRequest(post(chat.id, { type: "answer", toolCallId: "call-1", answer }), agentFactory(engine));
+		assert.equal(response.status, 400);
+		assert.match(await response.text(), /model cannot read images/);
+		assert.deepEqual(chatStore.getChat(chat.id)!.messages, before);
+		assert.equal(isTurnRunning(chat.id), false);
+	});
+
+	it("handwritten working is persisted once and reaches the teacher with the selected option", async () => {
+		const { engine, calls } = scriptedTeacher(defaultLesson);
+		const chat = createConfiguredChat("Test: handwritten working");
+		createdChats.push(chat.id);
+		await drainTurn(post(chat.id, { type: "text", text: "teach me the solar system" }), agentFactory(engine));
+		const image = {
+			mimeType: "image/png" as const,
+			data: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
+		};
+		const answer = { ...gradedAnswer(QUIZ_INPUT, ["Mercury"]), workingImage: image };
+		await drainTurn(post(chat.id, { type: "answer", toolCallId: "call-1", answer }), agentFactory(engine));
+		const record = chatStore.getChat(chat.id)!;
+		const result = record.messages.find((m) => m.role === "toolResult" && m.toolCallId === "call-1");
+		assert.ok(result && result.role === "toolResult");
+		assert.deepEqual(result.content.find((part) => part.type === "image"), { type: "image", ...image });
+		assert.equal((result.details as Record<string, unknown>).workingImage, undefined);
+		assert.ok(calls[1]!.some((content) => content.includes(image.data) && content.includes("Mercury")));
+		const part = projectView(record.messages).flatMap((m) => m.parts).find((p) => p.toolCallId === "call-1")!;
+		assert.deepEqual((part.output as { workingImage: unknown }).workingImage, image);
+	});
+
 	it("quiz tool call persists as a pending part; the answer continues the lesson", async () => {
 		const { engine, calls } = scriptedTeacher(defaultLesson);
 		const chat = createConfiguredChat("Test: solar system");

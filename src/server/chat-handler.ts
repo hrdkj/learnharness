@@ -276,6 +276,10 @@ export async function handleChatInput(
 	let conversationEngine: PiEngine;
 	try { conversationEngine = piEngineForSpec(conversation, () => callPurpose.background, lifecycle, retentionForSlot("strong")); }
 	catch { return Response.json({ error: conversation.provider === "chatgpt" ? chatGPTStreamError("model catalog") : isSubscriptionProvider(conversation.provider) ? nativeSubscriptionError(conversation.provider, "model catalog") : "The selected model is unavailable." }, { status: 503 }); }
+	const workingImage = input.type === "answer" ? input.answer.workingImage : input.type === "thinking" ? input.workingImage : undefined;
+	if (workingImage && !conversationEngine.model.input.includes("image")) {
+		return Response.json({ error: "The selected model cannot read images. Choose a model with image support to submit handwritten working." }, { status: 400 });
+	}
 	const modelIdForCompaction = `${conversationEngine.model.provider}:${conversationEngine.model.id}`;
 	await ensureCompacted(
 		{
