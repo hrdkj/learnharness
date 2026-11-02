@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { ChevronRightIcon } from "lucide-react";
 import { ToolContentResponse } from "@/components/ai-elements/message";
 import { Button } from "@/components/ui/button";
@@ -42,7 +42,7 @@ export interface PracticeDockProps {
 	expanded: boolean;
 	onExpand: () => void;
 	/** POST {type:"thinking"}; false means the input was not accepted. */
-	onSubmit: (text: string, workingImage?: QuestionWorkingImage) => Promise<boolean> | void;
+	onSubmit: (problemCallId: string, text: string, workingImage?: QuestionWorkingImage) => Promise<boolean> | void;
 	dictationSlot?: ReactNode;
 	/** Escape in the thinking field stops dictation (threaded from the page). */
 	onEscape?: () => void;
@@ -64,6 +64,8 @@ export function PracticeDock({ problemCallId, input, expanded, onExpand, onSubmi
 	const setWritingActive = useCallback((active: boolean) => { writingActive.current = active; setIsWriting(active); }, []);
 	const sendingRef = useRef(false);
 	const [sending, setSending] = useState(false);
+	const submissionGeneration = useRef(0);
+	useEffect(() => () => { submissionGeneration.current++; }, [problemCallId]);
 	// Ref MIRRORS the field ("nothing gets lost", the question-dock
 	// discipline): a submit resuming after `await finishDictation()` reads
 	// the tail, never a stale closure.
@@ -83,16 +85,17 @@ export function PracticeDock({ problemCallId, input, expanded, onExpand, onSubmi
 
 	const submit = () => {
 		if (compactionRunning || writingActive.current || sendingRef.current) return;
+		const attempt = submissionGeneration.current;
 		sendingRef.current = true;
 		setSending(true);
 		void (async () => {
 			try {
 				if (isDictationActive()) await finishDictation();
-				if (writingActive.current) return;
+				if (submissionGeneration.current !== attempt || writingActive.current) return;
 				const text = thinkingRef.current.trim();
 				const workingImage = writingRef.current?.image;
 				if (!text && !workingImage) return;
-				const accepted = await onSubmit(text, workingImage);
+				const accepted = await onSubmit(problemCallId, text, workingImage);
 				// A rejected send keeps both channels. Do not erase text typed
 				// while the tutor was responding; the drawing stays editable.
 				if (accepted !== false && thinkingRef.current.trim() === text) {

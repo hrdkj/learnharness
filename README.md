@@ -31,6 +31,8 @@ Instead of just giving you an explanation, it uses your answers and thinking to 
 
 **Think out loud.** The thinking fields let you explain your reasoning, uncertainties, and reactions in your own words. This is how the agent gets a detailed picture rather than just a record of right and wrong answers. You can type or use dictation.
 
+**Handwriting test branch.** Use a pen tablet to write on teaching questions and practice problems, keep the thinking box available, and submit your working as an image. See the [handwriting guide](docs/handwriting.md) for setup, screenshots, how saving works, and tablet compatibility notes.
+
 The agent can also research questions in the background, create visual explanations, and build interactive demonstrations.
 
 ## Knowledge that carries forward

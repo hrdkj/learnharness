@@ -499,9 +499,9 @@ export function Chat({
 	// the dock stays mounted (the problem is still active until the agent
 	// concludes).
 	const submitThinking = useCallback(
-		async (text: string, workingImage?: QuestionWorkingImage) => {
+		async (problemCallId: string, text: string, workingImage?: QuestionWorkingImage) => {
 			const problem = activeProblemRef.current;
-			if (!problem || busyRef.current) return false;
+			if (!problem || problem.toolCallId !== problemCallId || busyRef.current) return false;
 			return send({ type: "thinking", problemCallId: problem.toolCallId, text, ...(workingImage ? { workingImage } : {}) });
 		},
 		[send],

@@ -61,7 +61,9 @@ export function QuestionWriting({ draft, onChange, onActiveChange, controls, onT
 	const closing = useRef(false);
 	const current = useRef(draft);
 	current.current = draft;
-	useEffect(() => () => { generation.current++; }, []);
+	const activeChangeRef = useRef(onActiveChange);
+	activeChangeRef.current = onActiveChange;
+	useEffect(() => () => { generation.current++; activeChangeRef.current(false); }, []);
 
 	const undo = useCallback(() => {
 		const value = current.current;
