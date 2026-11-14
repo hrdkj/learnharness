@@ -266,6 +266,21 @@ try {
   await stylus.detach(); await button("Undo"); assert.equal(await ink(), 0); await button("Undo"); assert.equal(await ink(), originalPen);
   group("zero-pressure hover and held/released stylus eraser preserve complete-stroke Undo");
 
+  await button("Clear");
+  await run(() => document.querySelector(".drawing-pad-ink").addEventListener("pointerdown", event => { window.fixture.lastPenId = event.pointerId; }, { once: true }));
+  const dropout = await page.createCDPSession(), dropoutBox = await (await page.$(".drawing-pad-ink")).boundingBox();
+  await dropout.send("Input.dispatchMouseEvent", { type: "mousePressed", x: dropoutBox.x + dropoutBox.width * .2, y: dropoutBox.y + dropoutBox.height * .5, button: "left", buttons: 1, pointerType: "pen", force: .8 });
+  await run(() => {
+    const canvas = document.querySelector(".drawing-pad-ink"), r = canvas.getBoundingClientRect(), pointerId = window.fixture.lastPenId;
+    const move = (x, pressure) => canvas.dispatchEvent(new PointerEvent("pointermove", { bubbles: true, pointerId, pointerType: "pen", pressure, buttons: 1, clientX: r.x + r.width * x, clientY: r.y + r.height * .5 }));
+    move(.3, .8); move(.35, 0); move(.4, 0); move(.5, .8); move(.6, .8);
+  });
+  await dropout.send("Input.dispatchMouseEvent", { type: "mouseReleased", x: dropoutBox.x + dropoutBox.width * .6, y: dropoutBox.y + dropoutBox.height * .5, button: "left", pointerType: "pen", force: 0 });
+  await dropout.detach();
+  const bridged = await ink(); assert.ok(bridged > 0);
+  await button("Undo"); assert.equal(await ink(), 0, "a brief zero-pressure dropout with the tip down stays one stroke");
+  group("brief zero-pressure dropouts while the pen tip is down do not break the stroke");
+
   await call("setHistory", "practice", pose("p1"));
   const problem = { type: "thinking", expanded: true, problem: { statement: "Compute $\\frac{1}{2}+\\frac{1}{2}$.", occurrence: occurrence("p1") }, draft: { thinking: "" } };
   await call("navigate", "practice", "practice", problem); await open(); await stroke(); const practiceInk = await ink();

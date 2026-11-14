@@ -17,6 +17,8 @@ export interface MountedSheet {
   togglePenEraser(): void;
   selectHand(): void;
 }
+/** Longest zero-pressure run, with the tip still down, that continues a pen stroke. */
+const PEN_DROPOUT_MS = 200;
 export function mountSheet(container: HTMLElement, ctx: PluginFrontendContext, sheets: Sheets, state: SessionSheet,
   input: PluginSessionViewInput, signal: AbortSignal): MountedSheet {
   const root = document.createElement("div"); root.className = "drawing-pad-root";
@@ -35,6 +37,8 @@ export function mountSheet(container: HTMLElement, ctx: PluginFrontendContext, s
   const buttons: PluginWidgetHandle<PluginButtonProps>[] = [];
   let disposed = false, preparing = !state.draft, active: Stroke | undefined, activeDraftId: number | undefined;
   let pointerId: number | undefined;
+  // Start time of a run of zero-pressure samples while the pen tip is still down.
+  let dropoutSince: number | undefined;
   let panDrag: { x: number; y: number; pan: SessionSheet["pan"]; rightButton: boolean } | undefined;
   let reference: HTMLElement | undefined;
   let referenceMount: ReturnType<typeof mountReference> | undefined;
@@ -102,7 +106,7 @@ export function mountSheet(container: HTMLElement, ctx: PluginFrontendContext, s
   };
   const flush = () => {
     const stroke = active, id = activeDraftId;
-    active = undefined; activeDraftId = undefined; panDrag = undefined;
+    active = undefined; activeDraftId = undefined; panDrag = undefined; dropoutSince = undefined;
     const draft = state.draft;
     if (stroke && draft && draft.id === id) commitHistory([...draft.strokes, stroke]);
   };
@@ -136,7 +140,18 @@ export function mountSheet(container: HTMLElement, ctx: PluginFrontendContext, s
     if (state.tool === "hand") return;
     const coalesced = event.getCoalescedEvents?.() ?? [];
     for (const sample of coalesced.length ? coalesced : [event]) {
-      if (sample.pointerType === "pen" && sample.pressure <= 0) { flush(); continue; }
+      if (sample.pointerType === "pen" && sample.pressure <= 0) {
+        // Some pen stacks (seen with Electron on Wayland) report pressure 0 for a
+        // few samples mid-stroke while the tip is still down (buttons bit 1).
+        // Skip a short run of those instead of ending the stroke; a longer run
+        // is still a lift or hover, so distant points are never joined.
+        if (active && (sample.buttons & 1) !== 0) {
+          dropoutSince ??= sample.timeStamp;
+          if (sample.timeStamp - dropoutSince <= PEN_DROPOUT_MS) continue;
+        }
+        flush(); continue;
+      }
+      dropoutSince = undefined;
       const nextTool = (sample.buttons & 32) !== 0 ? "eraser" : state.tool;
       if (active && active.tool !== nextTool) flush();
       if (!active) { start(sample); continue; }
