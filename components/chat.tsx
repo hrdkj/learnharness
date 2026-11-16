@@ -124,6 +124,7 @@ import {
 } from "@/src/core";
 import { ReadingThinkingField } from "@/components/reading-thinking";
 import { currentUserThinkingOpen, setAllUserThinkingOpen } from "@/components/thinking-block";
+import { currentWhyOpen, setAllWhyOpen } from "@/components/answered-card";
 
 /** One width for everything: transcript, cards, and the bottom blob share this column. */
 /**
@@ -648,6 +649,14 @@ export function Chat({
 		};
 		window.addEventListener(kbdEventForChat("toggle-user-thinking"), onToggle);
 		return () => window.removeEventListener(kbdEventForChat("toggle-user-thinking"), onToggle);
+	}, [controller]);
+	// Ctrl/⌘Y (toggle-why): open or close EVERY answered-question Why, like ⌘T.
+	useEffect(() => {
+		const onToggle = () => {
+			if (isInteractionScopeEligible(sessionFindScopeRef.current, controller)) setAllWhyOpen(!currentWhyOpen());
+		};
+		window.addEventListener(kbdEventForChat("toggle-why"), onToggle);
+		return () => window.removeEventListener(kbdEventForChat("toggle-why"), onToggle);
 	}, [controller]);
 	const applyReadingThinking = useCallback((v: string) => {
 		readingThinkingRef.current = v;
