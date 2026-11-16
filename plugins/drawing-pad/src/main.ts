@@ -8,6 +8,7 @@ import { Sheets, type SessionSheet } from "./state.ts";
 import { appendDrawing } from "./submission.ts";
 import { PEN } from "./icons.ts";
 import { appPalette, recolorReference } from "./theme.ts";
+import { count } from "./perf.ts";
 type SessionAction = Extract<PluginActionContext, { surface: "session" }>;
 interface OpenPad {
   session: SessionSheet;
@@ -27,7 +28,7 @@ export async function activate(ctx: PluginFrontendContext): Promise<() => void> 
   const pageSessions = new Map<string, string>();
   const sheets = new Sheets(() => {
     if (!disposed && !ctx.signal.aborted) {
-      ctx.refreshActions(); ctx.refreshSubmissions();
+      ctx.refreshActions(); ctx.refreshSubmissions(); count("hostPublish", 2);
       if (current && [...sheets.sessions.values()].some(state => state.draft && state.draft.palette !== appPalette().key))
         void refreshPalette().catch(report);
     }

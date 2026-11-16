@@ -9,7 +9,8 @@
     "build": "node scripts/build.mjs",
     "typecheck": "tsc --noEmit",
     "test": "tsx --test tests/*.test.ts",
-    "test:browser": "node tests/browser.mjs"
+    "test:browser": "node tests/browser.mjs",
+    "test:perf": "node tests/perf.mjs"
   },
   "dependencies": { "html-to-image": "1.11.13" },
   "devDependencies": {

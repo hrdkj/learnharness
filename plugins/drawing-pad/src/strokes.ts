@@ -1,5 +1,6 @@
 /** Adapted from hrdkj/learnharness, codex/handwriting-contribution (48dd022).
  * See THIRD-PARTY.md. Coordinates and pressure remain in unrestricted world space. */
+import { count, timed } from "./perf.ts";
 export interface Point { x: number; y: number; pressure: number }
 export interface Stroke { tool: "pen" | "eraser"; points: Point[] }
 export type Tool = Stroke["tool"] | "hand";
@@ -37,17 +38,21 @@ function touchesStroke(stroke: Stroke, eraser: Stroke): boolean {
 }
 /** Keep eraser gestures in history so undo restores complete removed strokes. */
 export function visibleStrokes(history: readonly Stroke[]): Stroke[] {
-  let visible: Stroke[] = [];
-  for (const stroke of history) {
-    if (stroke.tool === "pen" && stroke.points.length) visible.push(stroke);
-    else if (stroke.tool === "eraser") visible = visible.filter(pen => !touchesStroke(pen, stroke));
-  }
-  return visible;
+  return timed("visible", () => {
+    let visible: Stroke[] = [];
+    for (const stroke of history) {
+      if (stroke.tool === "pen" && stroke.points.length) visible.push(stroke);
+      else if (stroke.tool === "eraser") visible = visible.filter(pen => !touchesStroke(pen, stroke));
+    }
+    return visible;
+  });
 }
 /** History-only edits (or Undo back to the sent drawing) are not new image content. */
 export function inkSignature(history: readonly Stroke[], color: string): string {
-  const visible = visibleStrokes(history);
-  return visible.length ? JSON.stringify([color, visible.map(stroke => stroke.points)]) : "";
+  return timed("signature", () => {
+    const visible = visibleStrokes(history);
+    return visible.length ? JSON.stringify([color, visible.map(stroke => stroke.points)]) : "";
+  });
 }
 export function paintSegment(context: CanvasRenderingContext2D, a: Point, b: Point, color: string): void {
   context.globalCompositeOperation = "source-over";
@@ -71,7 +76,10 @@ export function paintInk(canvas: HTMLCanvasElement, width: number, height: numbe
   context.resetTransform();
   context.clearRect(0, 0, canvas.width, canvas.height);
   context.setTransform(canvas.width / width, 0, 0, canvas.height / height, origin.x * canvas.width / width, origin.y * canvas.height / height);
-  for (const stroke of visibleStrokes(strokes)) {
+  const visible = timed("paintInk.visible", () => visibleStrokes(strokes));
+  count("fullRepaint");
+  count("points", visible.reduce((sum, stroke) => sum + stroke.points.length, 0));
+  for (const stroke of visible) {
     stroke.points.forEach((point, i) => paintSegment(context, stroke.points[Math.max(0, i - 1)]!, point, color));
   }
 }

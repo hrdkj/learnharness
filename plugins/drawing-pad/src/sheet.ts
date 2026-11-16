@@ -7,6 +7,7 @@ import { referenceBounds, viewOrigin } from "./geometry.ts";
 import { paintInk, paintSegment, type Point, type Stroke } from "./strokes.ts";
 import type { SessionSheet, Sheets } from "./state.ts";
 import { appPalette } from "./theme.ts";
+import { timed } from "./perf.ts";
 
 export interface MountedSheet {
   flush(): void;
@@ -66,7 +67,7 @@ export function mountSheet(container: HTMLElement, ctx: PluginFrontendContext, s
   const selectHand = () => { if (editable()) sheets.setTool(state, "hand"); };
   const undo = toolButton("Undo", undoHistory, UNDO);
   const clear = toolButton("Clear", () => { if (pointerId === undefined && state.draft) commitHistory([]); });
-  const render = () => {
+  const render = () => timed("render", () => {
     if (disposed) return;
     const draft = state.draft;
     toolbar.setAttribute("aria-label", `Drawing tools. ${state.tool === "pen" ? "Pen" : state.tool === "eraser" ? "Eraser" : "Hand"} selected.`);
@@ -96,9 +97,9 @@ export function mountSheet(container: HTMLElement, ctx: PluginFrontendContext, s
       if (canvas.width !== pixelsWide) canvas.width = pixelsWide;
       if (canvas.height !== pixelsHigh) canvas.height = pixelsHigh;
       const history = active && activeDraftId === draft.id ? [...draft.strokes, active] : draft.strokes;
-      paintInk(canvas, width, height, history, draft.color, origin);
+      timed("paintInk", () => paintInk(canvas, width, height, history, draft.color, origin));
     }
-  };
+  });
   const point = (event: PointerEvent): Point => {
     const rect = canvas.getBoundingClientRect(), origin = viewOrigin(rect.width, rect.height, state.pan, state.draft!.height);
     return { x: event.clientX - rect.left - origin.x, y: event.clientY - rect.top - origin.y,
@@ -116,7 +117,7 @@ export function mountSheet(container: HTMLElement, ctx: PluginFrontendContext, s
     active = { tool: (event.buttons & 32) !== 0 ? "eraser" : state.tool, points: [point(event)] };
     render();
   };
-  const down = (event: PointerEvent) => {
+  const down = (event: PointerEvent) => timed("down", () => {
     const rightButton = event.pointerType === "mouse" && event.button === 2;
     if (preparing || failure || !state.draft || pointerId !== undefined || event.pointerType === "touch" ||
       (event.pointerType !== "pen" && event.button !== 0 && !rightButton)) return;
@@ -126,8 +127,8 @@ export function mountSheet(container: HTMLElement, ctx: PluginFrontendContext, s
       panDrag = { x: event.clientX, y: event.clientY, pan: state.pan, rightButton }; render();
     }
     else if (event.pointerType !== "pen" || event.pressure > 0) start(event);
-  };
-  const move = (event: PointerEvent) => {
+  });
+  const move = (event: PointerEvent) => timed("move", () => {
     if (preparing || failure || !state.draft || pointerId !== event.pointerId) return;
     if (panDrag) {
       // Releasing Right while another mouse button is held emits pointermove,
@@ -161,8 +162,10 @@ export function mountSheet(container: HTMLElement, ctx: PluginFrontendContext, s
     }
     const draft = state.draft;
     if (draft && active?.tool === "eraser") render();
-  };
-  const finish = (event: PointerEvent) => {
+  });
+  // "up" is pointerup; cancel/lost-capture calls are kept apart so the
+  // trailing no-op lostpointercapture does not dilute pen-lift timings.
+  const finish = (event: PointerEvent) => timed(event.type === "pointerup" ? "up" : event.type, () => {
     if (pointerId !== event.pointerId) return;
     if (panDrag && event.type === "pointerup" && event.pointerType !== "pen") sheets.setPan(state,
       { x: panDrag.pan.x + event.clientX - panDrag.x, y: panDrag.pan.y + event.clientY - panDrag.y });
@@ -170,7 +173,7 @@ export function mountSheet(container: HTMLElement, ctx: PluginFrontendContext, s
     flush(); pointerId = undefined;
     if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
     render();
-  };
+  });
   canvas.addEventListener("pointerdown", down, { signal });
   canvas.addEventListener("pointermove", move, { signal });
   for (const name of ["pointerup", "pointercancel", "lostpointercapture"] as const) canvas.addEventListener(name, finish, { signal });
