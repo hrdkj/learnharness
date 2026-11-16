@@ -258,6 +258,21 @@ try {
     canvas.dispatchEvent(new PointerEvent("pointermove", { bubbles: true, pointerId, pointerType: "pen", pressure: .8, buttons: 1, button: 5, clientX: r.x + r.width * .7, clientY: r.y + r.height * .3 }));
   });
   assert.ok(await ink() > 0, "releasing the held eraser returns to Pen despite button=5");
+  await run(() => {
+    const canvas = document.querySelector(".drawing-pad-ink"), r = canvas.getBoundingClientRect(), pointerId = window.fixture.lastPenId;
+    canvas.dispatchEvent(new PointerEvent("pointermove", { bubbles: true, pointerId, pointerType: "pen", pressure: .8, buttons: 3, button: -1, clientX: r.x + r.width * .7, clientY: r.y + r.height * .3 }));
+  });
+  await run(() => new Promise(resolve => requestAnimationFrame(() => resolve())));
+  assert.equal(await ink(), 0, "held pen barrel button (buttons & 2) erases like the eraser bit");
+  await run(() => {
+    const canvas = document.querySelector(".drawing-pad-ink"), r = canvas.getBoundingClientRect(), pointerId = window.fixture.lastPenId;
+    canvas.dispatchEvent(new PointerEvent("pointermove", { bubbles: true, pointerId, pointerType: "pen", pressure: .8, buttons: 1, button: -1, clientX: r.x + r.width * .4, clientY: r.y + r.height * .725 }));
+  });
+  await run(() => {
+    const canvas = document.querySelector(".drawing-pad-ink"), r = canvas.getBoundingClientRect(), pointerId = window.fixture.lastPenId;
+    canvas.dispatchEvent(new PointerEvent("pointermove", { bubbles: true, pointerId, pointerType: "pen", pressure: .8, buttons: 1, button: -1, clientX: r.x + r.width * .7, clientY: r.y + r.height * .3 }));
+  });
+  assert.ok(await ink() > 0, "releasing the barrel button returns to Pen");
   const beforeHover = await ink();
   await run(() => {
     const canvas = document.querySelector(".drawing-pad-ink"), r = canvas.getBoundingClientRect(), pointerId = window.fixture.lastPenId;
@@ -265,7 +280,8 @@ try {
   });
   assert.equal(await ink(), beforeHover, "hover never joins distant pen points");
   await stylus.send("Input.dispatchMouseEvent", { type: "mouseReleased", x: penBox.x + penBox.width * .9, y: penBox.y + penBox.height * .3, button: "left", pointerType: "pen", force: 0 });
-  await stylus.detach(); await button("Undo"); assert.equal(await ink(), 0); await button("Undo"); assert.equal(await ink(), originalPen);
+  await stylus.detach(); await button("Undo"); assert.equal(await ink(), 0); await button("Undo"); assert.ok(await ink() > 0, "Undo restores ink the barrel button erased");
+  await button("Undo"); assert.equal(await ink(), 0); await button("Undo"); assert.equal(await ink(), originalPen);
   group("zero-pressure hover and held/released stylus eraser preserve complete-stroke Undo");
 
   await button("Clear");

@@ -189,6 +189,10 @@ export function mountSheet(container: HTMLElement, ctx: PluginFrontendContext, s
     const rect = canvas.getBoundingClientRect(), origin = viewOrigin(rect.width, rect.height, state.pan, state.draft!.height);
     return geometry = { left: rect.left, top: rect.top, originX: origin.x, originY: origin.y };
   };
+  // A held eraser end (32) or a held pen barrel button (2) erases. Mouse
+  // right button stays a pan gesture and is handled before this is consulted.
+  const toolFor = (event: PointerEvent): Stroke["tool"] =>
+    (event.buttons & 32) !== 0 || (event.pointerType === "pen" && (event.buttons & 2) !== 0) ? "eraser" : state.tool === "eraser" ? "eraser" : "pen";
   const point = (event: PointerEvent): Point => {
     const at = geometry ?? measure();
     return { x: event.clientX - at.left - at.originX, y: event.clientY - at.top - at.originY,
@@ -207,7 +211,7 @@ export function mountSheet(container: HTMLElement, ctx: PluginFrontendContext, s
     if (!state.draft || state.tool === "hand") return;
     applyScheduledInk(); syncInk();
     activeDraftId = state.draft.id;
-    active = { tool: (event.buttons & 32) !== 0 ? "eraser" : state.tool, points: [point(event)] };
+    active = { tool: toolFor(event), points: [point(event)] };
     if (active.tool === "pen" && painted && view) {
       // The dot a full repaint would draw for point 0.
       paintSegment(inkContext(), active.points[0]!, active.points[0]!, state.draft.color); livePainted = active;
@@ -250,7 +254,7 @@ export function mountSheet(container: HTMLElement, ctx: PluginFrontendContext, s
         flush(); continue;
       }
       dropoutSince = undefined;
-      const nextTool = (sample.buttons & 32) !== 0 ? "eraser" : state.tool;
+      const nextTool = toolFor(sample);
       if (active && active.tool !== nextTool) flush();
       if (!active) { start(sample); continue; }
       const next = point(sample);
