@@ -796,10 +796,10 @@ try {
   group("repaint economy: off-screen strokes are skipped in full repaints, restored exactly, and still exported");
 
   await stroke();
-  assert.equal(await run(() => document.querySelector(".drawing-pad-ink").getContext("2d").getContextAttributes().willReadFrequently), false,
-    "the display canvas is not created for readback");
+  assert.equal(await run(() => document.querySelector(".drawing-pad-ink").getContext("2d").getContextAttributes().willReadFrequently), true,
+    "the display canvas retains the CPU-backed setting selected by device measurements");
   assert.equal(images(await call("submit", { accept: false })).length, 1, "export still reads back and reports its visible ink");
-  group("display canvas context is not willReadFrequently; export still detects visible ink");
+  group("display canvas retains willReadFrequently; export still detects visible ink");
 
   // Keep the theme checks scoped to one saved reference rather than re-capturing
   // every retained sheet from the independent lifecycle groups above.
