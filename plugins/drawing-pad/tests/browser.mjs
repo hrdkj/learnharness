@@ -647,6 +647,8 @@ try {
   await chord("h", true); assert.equal(await run(() => window.fixture.keyEvents.filter(event => event.binding === "mod+shift+h").at(-1).invoked), false);
   group("editing shortcuts fail closed during gestures, with a closed pad, and behind modal/popup/foreign surfaces");
 
+  // Font data is cached per window: start each font-failure group from a cold cache.
+  await page.reload({ waitUntil: "networkidle0" }); await page.waitForFunction(() => window.fixtureReady);
   await call("navigate", "font-response-failure", "teaching", question); await run(() => { window.fixture.fontFetchMode = "html"; });
   await page.click("#draw"); await page.waitForFunction(() => document.querySelector('.drawing-pad-status[role="alert"]'));
   assert.match(await run(() => document.querySelector(".drawing-pad-status").textContent), /Could not load a reference font/);
@@ -655,12 +657,40 @@ try {
   assert.deepEqual(await pageStyles(), stylesBefore);
   group("HTML font responses fail closed instead of being inserted as live CSS or silently skipping fonts");
 
+  await page.reload({ waitUntil: "networkidle0" }); await page.waitForFunction(() => window.fixtureReady);
   await call("navigate", "font-fetch-cancel", "teaching", question); await run(() => { window.fixture.fontFetchMode = "hold"; });
   await page.click("#draw"); await page.waitForFunction(() => window.fixture.pendingFontFetches > 0); await close();
   assert.equal(await run(() => window.fixture.pendingFontFetches), 0); assert.ok(await run(() => window.fixture.abortedFontFetches) > 0);
   await run(() => { window.fixture.fontFetchMode = "normal"; }); await open();
   assert.deepEqual(await pageStyles(), stylesBefore);
   group("closing during font embedding aborts font fetches and reopening recovers without stylesheet mutation");
+
+  // Font data and assembled font CSS are cached per window; a fresh page starts cold.
+  const fontRequests = () => requests.filter(url => /\.(?:ttf|woff2?)$/.test(new URL(url).pathname)).length;
+  await page.reload({ waitUntil: "networkidle0" }); await page.waitForFunction(() => window.fixtureReady);
+  await run(() => {
+    window.fixture.fontFetchMode = "hold"; window.fixture.abortedFontFetches = 0; window.fixture.heldProbe = new AbortController();
+    window.fixture.heldResult = window.fixture.fontCssProbe(window.fixture.heldProbe.signal).then(() => "embedded", error => String(error));
+  });
+  await page.waitForFunction(() => window.fixture.pendingFontFetches > 0); await run(() => window.fixture.heldProbe.abort());
+  assert.match(await run(() => window.fixture.heldResult), /abort/i);
+  assert.equal(await run(() => window.fixture.pendingFontFetches), 0, "the last waiting capture leaving aborts the shared request");
+  assert.ok(await run(() => window.fixture.abortedFontFetches) > 0);
+  await run(() => { window.fixture.fontFetchMode = "normal"; });
+  const coldFonts = await call("fontCssProbe");
+  assert.match(coldFonts, /data:font\/ttf;base64,/, "a capture after an aborted one still embeds fonts");
+  assert.equal(await call("fontCssProbe"), coldFonts, "cached font CSS is byte-identical to the cold result");
+  await page.reload({ waitUntil: "networkidle0" }); await page.waitForFunction(() => window.fixtureReady);
+  await run(() => { window.fixture.fontFetchMode = "html"; });
+  assert.match(await run(() => window.fixture.fontCssProbe().then(() => "embedded", error => String(error))), /Could not load a reference font/);
+  await run(() => { window.fixture.fontFetchMode = "normal"; });
+  assert.match(await call("fontCssProbe"), /data:font\/ttf;base64,/, "a failed font request is retried by the next capture");
+  await call("navigate", "font-cache-first", "teaching", question); await open(); await close();
+  const fontsBeforeSecondOpen = fontRequests();
+  await call("navigate", "font-cache-second", "teaching", { ...question, question: { ...question.question, question: "Find $y^2$ when $y=4$." } }); await open();
+  assert.equal(fontRequests(), fontsBeforeSecondOpen, "a second open on a new question requests no fonts");
+  await close();
+  group("font data is fetched once per window: aborted and failed requests are not kept, cached CSS is identical, a second open requests no fonts");
 
   // Repaint economy: full display repaints are counted through clearRect, which
   // only a full repaint calls. A fresh page keeps the theme step to one sheet.

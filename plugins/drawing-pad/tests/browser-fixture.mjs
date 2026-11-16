@@ -206,9 +206,9 @@ window.fixture = {
   pendingPoseReads() { return heldPoseReads.length; },
   releasePoseReads() { window.fixture.holdPoseReads = false; for (const resolve of heldPoseReads.splice(0)) resolve(); },
   fontFetchMode: "normal", pendingFontFetches: 0, abortedFontFetches: 0,
-  async fontCssProbe() {
+  async fontCssProbe(signal = new AbortController().signal) {
     const root = document.createElement("div"); root.className = "drawing-pad-reference"; root.textContent = "Font probe"; document.body.append(root);
-    try { return await referenceFontCSS(root, new AbortController().signal); } finally { root.remove(); }
+    try { return await referenceFontCSS(root, signal); } finally { root.remove(); }
   },
   replayOnOpen: false, contentMounts: 0,
   replayContent() { surface?.replay(); },

@@ -63,6 +63,41 @@ function readDataUrl(blob: Blob, signal: AbortSignal): Promise<string> {
     signal.addEventListener("abort", abort, { once: true }); reader.readAsDataURL(blob);
   });
 }
+/** One font file's data URL, shared by every capture in this window. */
+interface FontResource { data: Promise<string>; controller: AbortController; waiters: number; settled: boolean }
+const resources = new Map<string, FontResource>();
+/** Assembled @font-face CSS per selected face list. */
+const assembled = new Map<string, string>();
+/** Fetch and base64-encode each font file once per window. Captures that
+ * overlap share one request; each caller's wait is abortable on its own, and
+ * the request is aborted (and dropped) only when its last waiter leaves.
+ * Failed or aborted requests are never kept, so the next capture retries. */
+async function fontData(url: string, signal: AbortSignal): Promise<string> {
+  signal.throwIfAborted();
+  let resource = resources.get(url);
+  if (!resource) {
+    const controller = new AbortController();
+    const created: FontResource = { controller, waiters: 0, settled: false, data: (async () => {
+      const response = await fetch(url, { signal: controller.signal });
+      if (!response.ok || response.headers.get("content-type")?.toLowerCase().includes("text/html")) throw new Error(`Could not load a reference font (${response.status}).`);
+      const blob = await response.blob();
+      if (!blob.size) throw new Error("A reference font was empty.");
+      return readDataUrl(blob, controller.signal);
+    })() };
+    created.data.then(() => { created.settled = true; }, () => { created.settled = true; if (resources.get(url) === created) resources.delete(url); });
+    resources.set(url, resource = created);
+  }
+  const shared = resource;
+  shared.waiters++;
+  const leave = () => {
+    if (--shared.waiters > 0 || shared.settled) return;
+    if (resources.get(url) === shared) resources.delete(url);
+    shared.controller.abort(signal.reason);
+  };
+  signal.addEventListener("abort", leave, { once: true });
+  try { return await abortable(shared.data, signal); }
+  finally { if (!signal.aborted) { signal.removeEventListener("abort", leave); shared.waiters--; } }
+}
 /** Build detached font CSS from browser-parsed, already-loaded stylesheets.
  * Never fetch/parse an imported stylesheet or insert rules into the live page.
  * CSSImportRule.styleSheet has the browser-resolved URL for relative font assets. */
@@ -103,26 +138,16 @@ export async function referenceFontCSS(root: HTMLElement, signal: AbortSignal): 
     visitRules(rules, sheet.href ?? document.baseURI);
   };
   for (const sheet of [...document.styleSheets, ...document.adoptedStyleSheets]) visitSheet(sheet);
-  const resources = new Map<string, Promise<string>>();
-  const resource = (url: string): Promise<string> => {
-    let pending = resources.get(url);
-    if (!pending) {
-      pending = (async () => {
-        const response = await fetch(url, { signal });
-        if (!response.ok || response.headers.get("content-type")?.toLowerCase().includes("text/html")) throw new Error(`Could not load a reference font (${response.status}).`);
-        const blob = await response.blob();
-        if (!blob.size) throw new Error("A reference font was empty.");
-        return readDataUrl(blob, signal);
-      })();
-      resources.set(url, pending);
-    }
-    return pending;
-  };
+  // The same selected faces always produce the same CSS (font data is cached
+  // per URL for the window), so skip rebuilding detached rules.
+  const key = JSON.stringify(faces.map(face => [face.css, face.source, face.base]));
+  const cached = assembled.get(key);
+  if (cached !== undefined) { signal.throwIfAborted(); return cached; }
   const result = await Promise.all(faces.map(async face => {
     let source = "", offset = 0;
     for (const token of cssUrls(face.source)) {
       source += face.source.slice(offset, token.start);
-      source += token.url.startsWith("data:") ? face.source.slice(token.start, token.end) : `url("${await resource(new URL(token.url, face.base).href)}")`;
+      source += token.url.startsWith("data:") ? face.source.slice(token.start, token.end) : `url("${await fontData(new URL(token.url, face.base).href, signal)}")`;
       offset = token.end;
     }
     source += face.source.slice(offset);
@@ -133,5 +158,7 @@ export async function referenceFontCSS(root: HTMLElement, signal: AbortSignal): 
     return rule.cssText;
   }));
   signal.throwIfAborted();
-  return result.join("\n");
+  const css = result.join("\n");
+  assembled.set(key, css);
+  return css;
 }
