@@ -44,10 +44,12 @@ export function mountSheet(container: HTMLElement, ctx: PluginFrontendContext, s
   let reference: HTMLElement | undefined;
   let referenceMount: ReturnType<typeof mountReference> | undefined;
   let failure: string | undefined;
-  // The display context is obtained once; its attributes are fixed by the first call.
+  // The display context is obtained once; its attributes are fixed by the first
+  // call. Never willReadFrequently: that forces a CPU-backed canvas, and the
+  // display canvas is never read back (only export canvases are).
   let ink: CanvasRenderingContext2D | undefined;
   const inkContext = () => {
-    ink ??= canvas.getContext("2d", { willReadFrequently: true }) ?? undefined;
+    ink ??= canvas.getContext("2d") ?? undefined;
     if (!ink) throw new Error("Could not create the drawing canvas.");
     return ink;
   };

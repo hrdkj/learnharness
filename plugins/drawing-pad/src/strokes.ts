@@ -165,9 +165,11 @@ export function paintStrokes(context: CanvasRenderingContext2D, width: number, h
   count("points", visible.reduce((sum, stroke) => sum + stroke.points.length, 0));
   for (const stroke of visible) paintStroke(context, stroke, color);
 }
+/** `readback` only for canvases whose pixels are read back (export); the
+ * first getContext call fixes a canvas's attributes. */
 export function paintInk(canvas: HTMLCanvasElement, width: number, height: number, strokes: readonly Stroke[], color: string,
-  origin: { x: number; y: number } = { x: 0, y: 0 }): void {
-  const context = canvas.getContext("2d", { willReadFrequently: true });
+  origin: { x: number; y: number } = { x: 0, y: 0 }, options: { readback?: boolean } = {}): void {
+  const context = canvas.getContext("2d", options.readback ? { willReadFrequently: true } : undefined);
   if (!context) throw new Error("Could not create the drawing canvas.");
   paintStrokes(context, width, height, timed("paintInk.visible", () => visibleStrokes(strokes)), color, origin);
 }

@@ -96,7 +96,7 @@ export async function exportSheet(captured: Capture, signal: AbortSignal): Promi
   if (!bounds) throw new Error("No visible ink could be captured. Your drawing has been kept.");
   const raster = exportRaster(bounds, draft.pixelRatio, captured.imageScale);
   const ink = document.createElement("canvas"); ink.width = raster.width; ink.height = raster.height;
-  paintInk(ink, bounds.width, bounds.height, draft.strokes, captured.color, { x: -bounds.x, y: -bounds.y });
+  paintInk(ink, bounds.width, bounds.height, draft.strokes, captured.color, { x: -bounds.x, y: -bounds.y }, { readback: true });
   if (!hasVisibleInk(ink)) throw new Error("No visible ink could be captured at the export resolution. Your drawing has been kept.");
   const combined = document.createElement("canvas"); combined.width = raster.width; combined.height = raster.height;
   const context = combined.getContext("2d");
