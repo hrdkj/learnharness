@@ -3,7 +3,8 @@ import { test } from "node:test";
 import { Compile } from "typebox/compile";
 import type { PluginBackendContext, PluginQuestionTypeDefinition } from "learnharness-plugin-api";
 import { activate } from "../src/backend.ts";
-import { definition, instructions, practiceInstructions, problemDefinition, isReady, normalizeLineEndings, readTests } from "../src/contract.ts";
+import { definition, instructions, notebookInstructions, practiceInstructions, problemDefinition, isReady, normalizeLineEndings, readTests } from "../src/contract.ts";
+import { notebookHost } from "./notebook-host.ts";
 import { findLanguage } from "../src/editor.ts";
 
 const question = Compile(definition.questionSchema);
@@ -14,10 +15,12 @@ const modelSolution = "```python\ndef example():\n    return 42\n```\n\nReturn t
 test("teacher question and practice problem register separately with role-scoped instructions and cleanup", () => {
   const calls: unknown[] = [];
   const cleanup = activate({
-    registerQuestionType(value) { calls.push(value); return () => { calls.push("question disposed"); }; },
-    registerProblemType(value) { calls.push(value); return () => { calls.push("problem disposed"); }; },
-    registerInstructions(value) { calls.push(value); return () => { calls.push("instructions disposed"); }; },
-  } as PluginBackendContext);
+    ...notebookHost({ dataDirectory: "/nonexistent-data" }),
+    registerTools(value: unknown) { calls.push(value); return () => { calls.push("tools disposed"); }; },
+    registerQuestionType(value: unknown) { calls.push(value); return () => { calls.push("question disposed"); }; },
+    registerProblemType(value: unknown) { calls.push(value); return () => { calls.push("problem disposed"); }; },
+    registerInstructions(value: unknown) { calls.push(value); return () => { calls.push("instructions disposed"); }; },
+  } as unknown as PluginBackendContext);
   const registered = calls[0] as PluginQuestionTypeDefinition;
   assert.equal(typeof registered.gradeAnswer, "function");
   const { gradeAnswer: _grader, ...rest } = registered;
@@ -27,15 +30,18 @@ test("teacher question and practice problem register separately with role-scoped
   assert.equal(typeof processSubmission, "function");
   assert.deepEqual(problemRest, problemDefinition);
   assert.equal(problemDefinition.tool.toolName, "coding_problem");
-  assert.deepEqual(calls[2], { agents: ["practice"], text: practiceInstructions });
-  assert.deepEqual(calls[3], { agents: ["teacher"], text: instructions });
+  assert.deepEqual(calls[2], { agents: ["practice"], text: practiceInstructions + " " + notebookInstructions });
+  assert.deepEqual(calls[3], { agents: ["teacher"], text: instructions + " " + notebookInstructions });
+  const tools = calls[4] as { agents: string[]; create(context: { chatId: string; agent: string }): { name: string }[] };
+  assert.deepEqual(tools.agents, ["teacher", "practice"]);
+  assert.deepEqual(tools.create({ chatId: "fixture", agent: "teacher" }).map(tool => tool.name), ["read_notebook"]);
   assert.equal(definition.teach.toolName, "coding_question");
   assert.equal("probe" in definition, false);
   assert.equal("execute" in definition, false);
   assert.equal(definition.showThinking, true);
   assert.equal("validateAnswer" in definition, false);
   cleanup();
-  assert.deepEqual(calls.slice(4), ["instructions disposed", "instructions disposed", "problem disposed", "question disposed"]);
+  assert.deepEqual(calls.slice(5), ["tools disposed", "instructions disposed", "instructions disposed", "problem disposed", "question disposed"]);
 });
 
 test("practice requires language and tests, shares the code schema and keeps the solution in host common fields", () => {

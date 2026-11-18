@@ -5,6 +5,7 @@ import { mountTestResult } from "./result-view.ts";
 import { mountModelSolution } from "./solution-view.ts";
 import { mountSavedQuestion } from "./question-view.ts";
 import { readTestResult, type CodingTestResult } from "./test-result.ts";
+import { activateNotebook } from "./notebook/entry.ts";
 
 function mountRecordedTests(container: HTMLElement, ctx: PluginFrontendContext, outcome: { result: unknown } | { error: string }, signal: AbortSignal, headerContainer?: HTMLElement): () => void {
   const result = "result" in outcome ? readTestResult(outcome.result) : null;
@@ -60,5 +61,6 @@ export function activate(ctx: PluginFrontendContext): () => void {
       } catch (error) { dispose(); throw error; }
     },
   } satisfies PluginProblemRenderer<CodingPayload, string>);
-  return () => { try { unregisterProblem(); } finally { unregisterQuestion(); } };
+  const disposeNotebook = activateNotebook(ctx);
+  return () => { try { disposeNotebook(); } finally { try { unregisterProblem(); } finally { unregisterQuestion(); } } };
 }

@@ -1,12 +1,14 @@
 import { Compartment, EditorState } from "@codemirror/state";
-import { drawSelection, EditorView, keymap, lineNumbers } from "@codemirror/view";
-import { standardKeymap, history, historyKeymap, indentMore, insertNewlineAndIndent } from "@codemirror/commands";
+import { drawSelection, EditorView, lineNumbers } from "@codemirror/view";
+import { history, indentMore, insertNewlineAndIndent } from "@codemirror/commands";
 import { bracketMatching, indentUnit, LanguageDescription, syntaxHighlighting } from "@codemirror/language";
 import { languages } from "@codemirror/language-data";
 import { oneDarkHighlightStyle } from "@codemirror/theme-one-dark";
 import type { PluginQuestionAnswerState, PluginQuestionEditorHandle, PluginQuestionEditorProps, PluginProblemEditorHandle, PluginProblemEditorProps } from "learnharness-plugin-api";
 import { isReady, normalizeLineEndings, type CodingPayload, type CodingQuestionPayload } from "./contract.ts";
 import { supportsSyntaxDiagnostics, syntaxDiagnosticsExtension } from "./diagnostics.ts";
+import { editingExtensions } from "./editor-extensions.ts";
+import { answerTargetsChanged, openNotebookFor, registerAnswerTarget, type AnswerTarget } from "./answer-targets.ts";
 
 export function findLanguage(name: string): LanguageDescription | null {
   return LanguageDescription.matchLanguageName(languages, name.trim(), false);
@@ -31,6 +33,15 @@ function createCodeView(container: HTMLElement, language: string, code: string, 
   status.setAttribute("role", "status");
   header.append(label, status);
   frame.append(header);
+  let notebookButton: HTMLButtonElement | undefined;
+  if (onChange) {
+    notebookButton = document.createElement("button");
+    notebookButton.type = "button";
+    notebookButton.className = "lh-coding-question__notebook";
+    notebookButton.textContent = "Open in notebook";
+    notebookButton.title = "Open the scratch notebook (Ctrl+Shift+N)";
+    header.insertBefore(notebookButton, status);
+  }
   container.append(frame);
 
   let disposed = false;
@@ -53,7 +64,7 @@ function createCodeView(container: HTMLElement, language: string, code: string, 
         EditorView.contentAttributes.of({ "aria-label": onChange ? "Code answer" : "Submitted code" }),
         editable.of([EditorState.readOnly.of(!active), EditorView.editable.of(active)]),
         languageSupport.of([]),
-        keymap.of([...standardKeymap, ...historyKeymap].filter(binding => ![binding.key, binding.mac, binding.win, binding.linux].some(key => key !== undefined && reservedKeys.has(key)))),
+        ...(onChange ? editingExtensions(reservedKeys) : []),
         EditorView.updateListener.of(update => {
           if (update.docChanged && !disposed && !applyingControlledUpdate && onChange) onChange(update.state.doc.toString());
         }),
@@ -81,6 +92,7 @@ function createCodeView(container: HTMLElement, language: string, code: string, 
 
   return {
     view,
+    notebookButton,
     update(code: string, nextActive: boolean) {
       if (disposed) return;
       const nextCode = normalizeLineEndings(code);
@@ -105,8 +117,9 @@ function createCodeView(container: HTMLElement, language: string, code: string, 
   };
 }
 
-type CodeEditorProps = Pick<PluginQuestionEditorProps, "answer" | "active" | "signal" | "onChange"> & {
-  readonly input: { payload: Pick<CodingPayload, "language" | "starterCode"> };
+type CodeEditorProps = Pick<PluginQuestionEditorProps, "answer" | "active" | "signal" | "onChange" | "chatId"> & {
+  readonly input: { payload: Pick<CodingPayload, "language" | "starterCode" | "notebookSetup"> };
+  readonly target: { id: string; kind: "question" | "problem"; statement: string };
 };
 
 function mountCodeEditor(container: HTMLElement, props: CodeEditorProps): PluginQuestionEditorHandle {
@@ -119,10 +132,29 @@ function mountCodeEditor(container: HTMLElement, props: CodeEditorProps): Plugin
   const editor = createCodeView(container, props.input.payload.language, initialCode, active, code => {
     if (active) publish(code);
   });
+  const target: AnswerTarget = {
+    sessionId: props.chatId,
+    id: props.target.id,
+    kind: props.target.kind,
+    statement: props.target.statement,
+    payload: { language: props.input.payload.language, notebookSetup: props.input.payload.notebookSetup },
+    isActive: () => !disposed && active && !props.signal.aborted,
+    setCode(code) {
+      if (disposed || !active) return;
+      const next = normalizeLineEndings(code);
+      editor.update(next, active);
+      publish(next);
+    },
+    focus() { if (!disposed && active) editor.view.focus(); },
+  };
+  const unregisterTarget = registerAnswerTarget(target);
+  const openNotebook = () => { if (!disposed) openNotebookFor(target); };
+  editor.notebookButton?.addEventListener("click", openNotebook);
   const dispose = () => {
     if (disposed) return;
     disposed = true;
     props.signal.removeEventListener("abort", dispose);
+    unregisterTarget();
     editor.dispose();
   };
   if (props.signal.aborted) dispose();
@@ -133,8 +165,10 @@ function mountCodeEditor(container: HTMLElement, props: CodeEditorProps): Plugin
   return {
     update(next) {
       if (disposed) return;
+      const changed = active !== next.active;
       active = next.active;
       editor.update(codeFromAnswer(next.answer), active);
+      if (changed) answerTargetsChanged();
     },
     focus() { if (!disposed && active) editor.view.focus(); },
     handleKeyDown(key) {
@@ -148,14 +182,15 @@ function mountCodeEditor(container: HTMLElement, props: CodeEditorProps): Plugin
 }
 
 export function mountAnswerEditor(container: HTMLElement, props: PluginQuestionEditorProps<CodingQuestionPayload>): PluginQuestionEditorHandle {
-  return mountCodeEditor(container, props);
+  return mountCodeEditor(container, { ...props, target: { id: props.questionId, kind: "question", statement: props.input.question } });
 }
 
 /** Adapt only the public controlled-state vocabulary; no fabricated question identity. */
 export function mountSubmissionEditor(container: HTMLElement, props: PluginProblemEditorProps<CodingPayload>): PluginProblemEditorHandle {
   const handle = mountCodeEditor(container, {
-    input: props.input, signal: props.signal, active: props.active,
+    input: props.input, signal: props.signal, active: props.active, chatId: props.chatId,
     answer: props.submission, onChange: props.onChange,
+    target: { id: props.problemId, kind: "problem", statement: props.input.statement },
   });
   return {
     ...handle,

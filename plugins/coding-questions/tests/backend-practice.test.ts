@@ -5,6 +5,7 @@ import path from "node:path";
 import { test } from "node:test";
 import type { PluginBackendContext, PluginProblemProcessingContext, PluginProblemTypeDefinition, JsonValue } from "learnharness-plugin-api";
 import { activate } from "../src/backend.ts";
+import { notebookHost } from "./notebook-host.ts";
 import type { CodingPayload } from "../src/contract.ts";
 import { readTestResult } from "../src/test-result.ts";
 
@@ -14,6 +15,7 @@ test("practice processor observes repeated submissions, keeps thinking/solution 
   let processSubmission!: (context: PluginProblemProcessingContext<CodingPayload, string>) => JsonValue | Promise<JsonValue>;
   let disposed = 0;
   const cleanup = activate({
+    ...notebookHost(),
     dataDirectory,
     registerQuestionType() { return () => { disposed++; }; },
     registerProblemType(value: PluginProblemTypeDefinition) { processSubmission = value.processSubmission!; return () => { disposed++; }; },

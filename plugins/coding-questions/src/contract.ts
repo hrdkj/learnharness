@@ -6,6 +6,8 @@ export const PROBLEM_TYPE_ID = "code";
 export type CodingPayload = {
   language: string;
   starterCode?: string;
+  /** Optional Python setup appended (not run) to the learner's scratch notebook. */
+  notebookSetup?: string;
   tests: CodingTests;
 };
 export type CodingQuestionPayload = CodingPayload & { modelSolution: string };
@@ -15,6 +17,8 @@ const executionInstructions = "On submission the exact learner code is written t
 export const instructions = "When a teaching prediction or understanding check calls for writing or editing code, you may use coding_question. Specify the language, optionally supply starter code, and always supply tests:{program,args,code} and modelSolution. Write modelSolution as Markdown with the model code in a fenced code block and an optional explanation; author it with the question, not after seeing the learner's answer. It is preserved with the question and revealed only in the answered transcript, not executed or automatically checked. " + executionInstructions;
 
 export const practiceInstructions = "When a practice problem calls for writing or editing code, use coding_problem. Supply the host's statement, mode, optional target, and committed modelSolution, plus payload:{language,starterCode?,tests:{program,args,code}}. Write modelSolution as Markdown with fenced solution code and an optional explanation; commit it when posing, not after seeing learner submissions. Never execute the model solution. " + executionInstructions + " A practice problem accepts repeated submissions. Test results are per-submission observations, not the final assessment and not an automatic conclusion. Review the code, separate thinking and test observations, and allow revisions. Only the existing conclude tool records your final assessment and closes the problem; the host then reveals the original committed modelSolution. Do not reveal it before conclusion.";
+
+export const notebookInstructions = "The learner has a Colab-like scratch Python notebook (persistent Jupyter kernel, one per session) beside coding questions and problems. For Python exercises, supply payload.notebookSetup with imports and a small in-memory sample input (never the solution or expected outputs) so the learner can inspect intermediate values and call their function before submitting; it is appended to the notebook unrun. Call read_notebook to see what the learner tried, especially before giving a hint or after repeated failures; quote their own cells when pointing at a mistake.";
 
 export const definition = {
   id: QUESTION_TYPE_ID,
@@ -32,6 +36,10 @@ export const definition = {
       starterCode: {
         type: "string",
         description: "Optional code for the learner to edit. Omit or leave empty for a code-writing answer from scratch.",
+      },
+      notebookSetup: {
+        type: "string",
+        description: "Optional Python for the learner's scratch notebook: imports plus a small in-memory sample dataset (for example a few-row DataFrame shaped like the test input) so they can try expressions and call their function before submitting. Appended once as an unrun cell. Never include the solution or test expectations.",
       },
       modelSolution: {
         type: "string",
@@ -73,6 +81,7 @@ export const problemDefinition = {
     properties: {
       language: definition.questionSchema.properties.language,
       starterCode: definition.questionSchema.properties.starterCode,
+      notebookSetup: definition.questionSchema.properties.notebookSetup,
       tests: definition.questionSchema.properties.tests,
     },
     required: ["language", "tests"],

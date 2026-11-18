@@ -5,6 +5,7 @@ import path from "node:path";
 import { test } from "node:test";
 import type { PluginBackendContext, PluginQuestionGradingContext, PluginQuestionTypeDefinition, JsonValue } from "learnharness-plugin-api";
 import { activate } from "../src/backend.ts";
+import { notebookHost } from "./notebook-host.ts";
 import type { CodingQuestionPayload } from "../src/contract.ts";
 import { readTestResult } from "../src/test-result.ts";
 
@@ -33,6 +34,7 @@ test("public registered grader executes the supplied recipe after submission, re
   let grade!: (context: PluginQuestionGradingContext<SavedPayload, string>) => JsonValue | Promise<JsonValue>;
   let disposed = 0;
   const cleanup = activate({
+    ...notebookHost(),
     dataDirectory,
     registerQuestionType(value: PluginQuestionTypeDefinition) { assert.equal(typeof value.gradeAnswer, "function"); grade = value.gradeAnswer!; return () => { disposed++; }; },
     registerProblemType() { return () => { disposed++; }; },

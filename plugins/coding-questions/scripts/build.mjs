@@ -15,7 +15,8 @@ fs.mkdirSync(output, { recursive: true });
 const common = { bundle: true, target: "es2022", minify: true, legalComments: "eof", logLevel: "warning", absWorkingDir: root };
 const frontend = await build({ ...common, entryPoints: { main: "src/main.ts" }, outdir: output, format: "esm", platform: "browser", splitting: true, chunkNames: "assets/[name]-[hash]", metafile: true });
 await build({ ...common, entryPoints: ["src/backend.ts"], outfile: path.join(output, "backend.cjs"), format: "cjs", platform: "node" });
-for (const [from, to] of [["manifest.json", "manifest.json"], ["src/styles.css", "styles.css"], ["README.md", "README.md"], ["LICENSE", "LICENSE"]]) {
+fs.mkdirSync(path.join(output, "assets"), { recursive: true });
+for (const [from, to] of [["src/kernel-bridge.py", "assets/kernel-bridge.py"], ["manifest.json", "manifest.json"], ["src/styles.css", "styles.css"], ["README.md", "README.md"], ["LICENSE", "LICENSE"]]) {
   fs.copyFileSync(path.join(root, from), path.join(output, to));
 }
 // Keep dependency attribution and the full licenses of every JS package actually
