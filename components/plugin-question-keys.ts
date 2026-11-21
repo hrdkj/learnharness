@@ -26,6 +26,9 @@ export function composingQuestionKey(event: { isComposing?: boolean; keyCode?: n
 /** Called after Escape ownership is snapshotted, before native Tab prevention. */
 export function capturePluginQuestionKey(event: KeyboardEvent): void {
 	if (composingQuestionKey(event)) { composing.add(event); return; }
+	// A side-docked plugin surface (the notebook) owns its own keys, Mod+Enter included.
+	const target = event.target as { closest?: (selector: string) => unknown } | null;
+	if (typeof target?.closest === "function" && target.closest("[data-surface-placement='side']")) return;
 	const current = owner;
 	if (!current?.eligible(event.key)) return;
 	const claim = () => { claimed.add(event); event.preventDefault(); };

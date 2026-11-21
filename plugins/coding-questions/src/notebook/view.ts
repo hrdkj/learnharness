@@ -21,6 +21,7 @@ interface CellView {
   docs: HTMLElement;
   outputs: HTMLElement;
   answer: HTMLButtonElement;
+  submit: HTMLButtonElement;
   editor?: EditorView;
   markdown?: PluginWidgetHandle<PluginMarkdownProps>;
   editingMarkdown: boolean;
@@ -92,16 +93,14 @@ export function mountNotebook(container: HTMLElement, options: {
   const status = document.createElement("span");
   status.className = "lh-nb-status";
   status.setAttribute("role", "status");
-  const runAll = button(document, "Run all", "Run all cells (Ctrl+F9)");
-  const interrupt = button(document, "Interrupt", "Interrupt execution (Ctrl+M I)");
-  const restart = button(document, "Restart", "Restart kernel; variables are cleared (Ctrl+M .)");
-  const restartRun = button(document, "Restart & run all", "Restart the kernel, then run every cell");
+  const runAll = button(document, "▶ All", "Run all cells (Ctrl+F9)");
+  const interrupt = button(document, "■", "Interrupt execution (Ctrl+M I)");
+  const restart = button(document, "↻", "Restart kernel; variables are cleared (Ctrl+M .)");
+  const restartRun = button(document, "↻▶", "Restart the kernel, then run every cell");
   const addCode = button(document, "+ Code", "Insert code cell below (B)");
   const addText = button(document, "+ Text", "Insert text cell below");
-  const help = button(document, "Shortcuts", "Keyboard shortcuts (Ctrl+M H)");
-  const spacer = document.createElement("span");
-  spacer.className = "lh-nb-spacer";
-  bar.append(heading, status, spacer, runAll, interrupt, restart, restartRun, addCode, addText, help);
+  const help = button(document, "?", "Keyboard shortcuts (Ctrl+M H)");
+  bar.append(heading, status, runAll, interrupt, restart, restartRun, addCode, addText, help);
   root.append(bar);
 
   const helpPanel = document.createElement("div");
@@ -115,18 +114,6 @@ export function mountNotebook(container: HTMLElement, options: {
   }
   helpPanel.append(table);
   root.append(helpPanel);
-
-  if (options.problem) {
-    const details = document.createElement("details");
-    details.className = "lh-nb-problem";
-    details.open = true;
-    const summary = document.createElement("summary");
-    summary.textContent = title(options.problem.statement);
-    const body = document.createElement("div");
-    details.append(summary, body);
-    ctx.ui.mountMarkdown(body, { text: options.problem.statement }, { signal });
-    root.append(details);
-  }
 
   const message = document.createElement("div");
   message.className = "lh-nb-message";
@@ -236,14 +223,33 @@ export function mountNotebook(container: HTMLElement, options: {
     commandMode();
   };
 
-  const useAsAnswer = (id: string) => {
+  const useAsAnswer = (id: string, submit = false) => {
     const cell = controller.cell(id);
-    const target = activeAnswerTarget(controller.sessionId, options.problem?.id);
+    const target = activeAnswerTarget(controller.sessionId, currentProblemId);
     if (!cell || !target) return;
     target.setCode(cell.source);
     void controller.saveNow();
-    options.close();
-    target.focus();
+    if (!submit) return;
+    // The host owns submission; press its practice Submit once the draft is ready.
+    let tries = 0;
+    const press = () => {
+      const send = document.querySelector<HTMLButtonElement>('[data-testid="practice-send"], [data-testid="plugin-question-send"]');
+      if (send && !send.disabled) { send.click(); return; }
+      if (++tries < 30) setTimeout(press, 50);
+    };
+    requestAnimationFrame(press);
+  };
+
+  // Seed (and run) the setup of whichever problem is active, once per problem.
+  let currentProblemId = options.problem?.id;
+  const seedProblem = (problem: { id: string; statement: string } | undefined, setup: string | undefined) => {
+    if (!problem) return;
+    currentProblemId = problem.id;
+    const seeded = controller.seed(problem.id, title(problem.statement), setup);
+    if (!seeded) return;
+    reconcile();
+    select(seeded.id);
+    controller.run([seeded.id]);
   };
 
   // Cells -------------------------------------------------------------------
@@ -261,11 +267,12 @@ export function mountNotebook(container: HTMLElement, options: {
     main.className = "lh-nb-main";
     const tools = document.createElement("div");
     tools.className = "lh-nb-tools";
-    const answer = button(document, "Use as answer", "Copy this cell into the answer editor, then press Submit", "lh-nb-tool lh-nb-tool--answer");
+    const answer = button(document, "Use as answer", "Copy this cell into the answer editor", "lh-nb-tool lh-nb-tool--answer");
+    const submit = button(document, "Submit", "Copy this cell into the answer editor and submit it", "lh-nb-tool lh-nb-tool--answer lh-nb-tool--submit");
     const up = button(document, "↑", "Move cell up (Ctrl+M K)", "lh-nb-tool");
     const down = button(document, "↓", "Move cell down (Ctrl+M J)", "lh-nb-tool");
     const del = button(document, "Delete", "Delete cell (D, D)", "lh-nb-tool");
-    tools.append(answer, up, down, del);
+    tools.append(submit, answer, up, down, del);
     const editorHost = document.createElement("div");
     editorHost.className = "lh-nb-editor";
     const rendered = document.createElement("div");
@@ -279,7 +286,7 @@ export function mountNotebook(container: HTMLElement, options: {
     main.append(tools, editorHost, rendered, docs, outputs);
     root.append(gutter, main);
 
-    const view: CellView = { id: cell.id, root, run, count, editorHost, rendered, docs, outputs, answer, editingMarkdown: true, type: cell.type };
+    const view: CellView = { id: cell.id, root, run, count, editorHost, rendered, docs, outputs, answer, submit, editingMarkdown: true, type: cell.type };
     view.editor = createCellEditor(editorHost, {
       source: cell.source,
       kind: cell.type,
@@ -296,6 +303,7 @@ export function mountNotebook(container: HTMLElement, options: {
     });
     run.addEventListener("click", () => { select(cell.id); runCell(cell.id); });
     answer.addEventListener("click", () => useAsAnswer(cell.id));
+    submit.addEventListener("click", () => useAsAnswer(cell.id, true));
     up.addEventListener("click", () => controller.move(cell.id, -1));
     down.addEventListener("click", () => controller.move(cell.id, 1));
     del.addEventListener("click", () => remove(cell.id));
@@ -317,8 +325,8 @@ export function mountNotebook(container: HTMLElement, options: {
     view.run.title = state === "running" ? "Interrupt (Ctrl+M I)" : "Run cell (Ctrl+Enter)";
     view.run.hidden = cell.type !== "code";
     view.count.textContent = cell.type !== "code" ? "" : state === "queued" || state === "running" ? "[*]" : cell.executionCount === null ? "[ ]" : `[${cell.executionCount}]`;
-    view.answer.hidden = cell.type !== "code";
-    view.answer.disabled = !activeAnswerTarget(controller.sessionId, options.problem?.id);
+    view.answer.hidden = view.submit.hidden = cell.type !== "code";
+    view.answer.disabled = view.submit.disabled = !activeAnswerTarget(controller.sessionId, currentProblemId);
     // Outputs: re-render only when the array or its length changed.
     const key = `${cell.outputs.length}:${cell.outputs.map(o => o.output_type === "stream" ? o.text.length : 1).join(",")}`;
     if (view.outputsKey !== key) { view.outputsKey = key; renderOutputs(view.outputs, cell.outputs); }
@@ -444,15 +452,17 @@ export function mountNotebook(container: HTMLElement, options: {
     else if (change.cellId) updateCell(change.cellId);
     updateStatus();
   });
-  const unwatchTargets = onAnswerTargetsChange(() => { for (const id of views.keys()) updateCell(id); });
+  const unwatchTargets = onAnswerTargetsChange(() => {
+    for (const id of views.keys()) updateCell(id);
+    const target = activeAnswerTarget(controller.sessionId);
+    if (target && target.id !== currentProblemId && !disposed) void controller.loaded.then(() => { if (!disposed) seedProblem({ id: target.id, statement: target.statement }, target.payload.notebookSetup); });
+  });
   updateStatus();
   void controller.loaded.then(() => {
     if (disposed) return;
-    const problem = options.problem;
-    const seeded = problem ? controller.seed(problem.id, title(problem.statement), options.setup) : undefined;
     reconcile();
-    if (seeded) { select(seeded.id); }
-    else select(controller.notebook.cells.at(-1)?.id);
+    select(controller.notebook.cells.at(-1)?.id);
+    seedProblem(options.problem, options.setup);
     if (selected) edit(selected);
   }).catch(error => {
     controller.message = `Could not load notebook: ${error instanceof Error ? error.message : String(error)}`;

@@ -1,6 +1,6 @@
 import type { PluginAction, PluginActionContext, PluginFrontendContext, PluginSettingsSchema, PluginSurfaceProps, PluginWidgetHandle } from "learnharness-plugin-api";
 import { PROBLEM_TYPE_ID, QUESTION_TYPE_ID } from "../contract.ts";
-import { setNotebookOpener, type AnswerTarget } from "../answer-targets.ts";
+import { latestActiveTarget, onAnswerTargetsChange, setNotebookOpener, type AnswerTarget } from "../answer-targets.ts";
 import { NotebookController } from "./controller.ts";
 import { mountNotebook, type ProblemReference } from "./view.ts";
 
@@ -55,7 +55,7 @@ export function activateNotebook(ctx: PluginFrontendContext): () => void {
     const state: NonNullable<typeof open> = { sessionId, controller: new AbortController() };
     open = state;
     const props: PluginSurfaceProps = {
-      title: "Notebook", background: "opaque",
+      title: "Notebook", background: "opaque", placement: "side",
       content(container, signal) {
         if (signal.aborted || open !== state) return;
         return mountNotebook(container, { ctx, controller, problem: current.problem, setup: current.setup, close, signal });
@@ -76,6 +76,17 @@ export function activateNotebook(ctx: PluginFrontendContext): () => void {
       show(context.sessionId, currentFromView(context, ctx.manifest.id), context.surfaceTarget);
     },
   };
+
+  // Open beside the chat as soon as a Python coding problem is posed, once
+  // per problem: closing it for a problem is respected until the next one.
+  const autoOpened = new Set<string>();
+  cleanups.push(onAnswerTargetsChange(() => {
+    const target = latestActiveTarget();
+    if (!target || autoOpened.has(target.id) || !/^(py|python\d*)$/i.test(target.payload.language.trim())) return;
+    autoOpened.add(target.id);
+    if (open?.sessionId === target.sessionId) return; // the open notebook seeds it
+    show(target.sessionId, { problem: { id: target.id, statement: target.statement }, setup: target.payload.notebookSetup });
+  }));
 
   setNotebookOpener((target: AnswerTarget) => {
     show(target.sessionId, { problem: { id: target.id, statement: target.statement }, setup: target.payload.notebookSetup });

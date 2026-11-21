@@ -141,14 +141,14 @@
 .lh-nb *, .lh-nb *::before, .lh-nb *::after { box-sizing: border-box; }
 .lh-nb-bar {
   position: sticky; top: 0; z-index: 2;
-  display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem;
-  padding: 0.75rem 2.5rem 0.6rem 0;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem;
+  padding: 0.6rem 2.5rem 0.5rem 0;
   background: var(--nb-bg);
   border-bottom: 1px solid var(--nb-border);
 }
 .lh-nb-bar strong { font-size: 14px; margin-right: 0.4rem; }
 .lh-nb-spacer { flex: 1; }
-.lh-nb-status { color: var(--nb-muted); font-size: 12px; }
+.lh-nb-status { color: var(--nb-muted); font-size: 12px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1 1 8rem; }
 .lh-nb-status::before { content: "●"; margin-right: 0.35rem; color: var(--nb-muted); }
 .lh-nb-status[data-state="idle"]::before { color: #6cbf6c; }
 .lh-nb-status[data-state="busy"]::before, .lh-nb-status[data-state="starting"]::before, .lh-nb-status[data-state="restarting"]::before { color: #e5c07b; }
@@ -220,3 +220,6 @@
 .lh-nb-output [data-fg="black"] { color: var(--nb-muted); }
 .lh-nb-footer { display: flex; justify-content: center; gap: 0.5rem; margin-top: 0.75rem; }
 
+/* Submit is the primary per-cell action now that the notebook sits beside the chat. */
+.lh-nb-tool--submit { border-color: #3b82f6; background: #2563eb; color: #fff; }
+.lh-nb-tool--submit:hover:not(:disabled) { background: #1d4ed8; }

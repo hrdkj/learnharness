@@ -6,7 +6,7 @@ export const PROBLEM_TYPE_ID = "code";
 export type CodingPayload = {
   language: string;
   starterCode?: string;
-  /** Optional Python setup appended (not run) to the learner's scratch notebook. */
+  /** Optional Python setup appended (and run) to the learner's scratch notebook. */
   notebookSetup?: string;
   tests: CodingTests;
 };
@@ -18,7 +18,7 @@ export const instructions = "When a teaching prediction or understanding check c
 
 export const practiceInstructions = "When a practice problem calls for writing or editing code, use coding_problem. Supply the host's statement, mode, optional target, and committed modelSolution, plus payload:{language,starterCode?,tests:{program,args,code}}. Write modelSolution as Markdown with fenced solution code and an optional explanation; commit it when posing, not after seeing learner submissions. Never execute the model solution. " + executionInstructions + " A practice problem accepts repeated submissions. Test results are per-submission observations, not the final assessment and not an automatic conclusion. Review the code, separate thinking and test observations, and allow revisions. Only the existing conclude tool records your final assessment and closes the problem; the host then reveals the original committed modelSolution. Do not reveal it before conclusion.";
 
-export const notebookInstructions = "The learner has a Colab-like scratch Python notebook (persistent Jupyter kernel, one per session) beside coding questions and problems. For Python exercises, supply payload.notebookSetup with imports and a small in-memory sample input (never the solution or expected outputs) so the learner can inspect intermediate values and call their function before submitting; it is appended to the notebook unrun. Call read_notebook to see what the learner tried, especially before giving a hint or after repeated failures; quote their own cells when pointing at a mistake.";
+export const notebookInstructions = "The learner has a Colab-like scratch Python notebook (persistent Jupyter kernel, one per session) that opens beside the chat whenever a Python coding question or problem is posed. For Python exercises, always supply payload.notebookSetup with the imports and the data the question is about: a small in-memory sample, or for dataset questions pd.read_csv on the real local CSV by absolute path (never the solution or expected outputs). It is appended to the notebook and run automatically, so the data is loaded before the learner starts. Call read_notebook to see what the learner tried, especially before giving a hint or after repeated failures; quote their own cells when pointing at a mistake.";
 
 export const definition = {
   id: QUESTION_TYPE_ID,
@@ -39,7 +39,7 @@ export const definition = {
       },
       notebookSetup: {
         type: "string",
-        description: "Optional Python for the learner's scratch notebook: imports plus a small in-memory sample dataset (for example a few-row DataFrame shaped like the test input) so they can try expressions and call their function before submitting. Appended once as an unrun cell. Never include the solution or test expectations.",
+        description: "Python for the learner's scratch notebook: imports plus the data (a few-row DataFrame shaped like the test input, or pd.read_csv of the real CSV by absolute path) so they can try expressions before submitting. Appended once and run automatically. Never include the solution or test expectations.",
       },
       modelSolution: {
         type: "string",

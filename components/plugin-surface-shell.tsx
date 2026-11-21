@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useId, useLayoutEffect, useRef, type ReactNode } from "react";
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { InteractionLayerOwner, useInteractionLayer, type CloseOutcome } from "./interaction-layers";
 import type { SurfaceBoundary } from "./plugin-surface-targets";
 import type { PluginSurfaceProps } from "@/src/core";
@@ -44,10 +44,11 @@ function enterRegion(boundary: SurfaceBoundary, root: HTMLElement, remembered = 
 }
 
 /** A view, not a modal: no trap, global hiding, viewport portal or scroll lock. */
-export function PluginSurface({ pluginId, title, background = "dimmed", onClose, runtime, boundary, opener, children }: {
+export function PluginSurface({ pluginId, title, background = "dimmed", placement = "cover", onClose, runtime, boundary, opener, children }: {
 	pluginId?: string;
 	title: string;
 	background?: PluginSurfaceProps["background"];
+	placement?: PluginSurfaceProps["placement"];
 	onClose?: () => void | Promise<void>;
 	runtime: SurfaceRuntime;
 	boundary: SurfaceBoundary;
@@ -85,7 +86,7 @@ export function PluginSurface({ pluginId, title, background = "dimmed", onClose,
 		});
 	}, [boundary, controller, layerId, opener]);
 	const layer = useInteractionLayer({
-		id: layerId, kind: "view", enabled: !runtime.signal.aborted && !boundary.signal.aborted,
+		id: layerId, kind: "view", enabled: placement !== "side" && !runtime.signal.aborted && !boundary.signal.aborted,
 		// Stack siblings share only the page owner, never another surface's
 		// lifecycle (a menu/dialog may explicitly own a surface descendant).
 		ownerId: controller.ownerOf(boundary.body)?.id ?? null,
@@ -96,16 +97,68 @@ export function PluginSurface({ pluginId, title, background = "dimmed", onClose,
 		if (boundary.signal.aborted || !boundary.stack?.isConnected || !boundary.body.isConnected) {
 			runtime.report(new Error("Surface target is no longer active")); runtime.dispose(); return;
 		}
+		if (placement === "side") return;
 		if (!layer.isTop || entered.current) return;
 		entered.current = true;
 		focusInitial();
-	}, [boundary, runtime, layer.isTop, focusInitial]);
+	}, [boundary, runtime, layer.isTop, focusInitial, placement]);
+	// A side dock is not a layer: the page beside it stays live, so it only
+	// reserves its width (body padding) and keeps keys from reaching the page.
+	const frame = useRef<HTMLDivElement>(null);
+	useEffect(() => {
+		if (placement !== "side") return;
+		const body = boundary.body;
+		const previous = body.style.paddingRight;
+		const width = () => {
+			let stored: number | undefined;
+			try { stored = Number(localStorage.getItem("lh.sideSurfaceWidth")) || undefined; } catch { /* private storage */ }
+			return Math.round(Math.min(Math.max(stored ?? body.clientWidth * 0.58, 360), body.clientWidth - 320));
+		};
+		const apply = (px: number) => {
+			body.style.paddingRight = `${px}px`;
+			if (frame.current) frame.current.style.width = `${px}px`;
+		};
+		apply(width());
+		const onResize = () => apply(width());
+		window.addEventListener("resize", onResize);
+		const node = frame.current;
+		const stopKeys = (event: KeyboardEvent) => {
+			// The dock owns Enter (with any modifier) and Escape: page-level
+			// submit/expand handlers must never act on keys typed in here.
+			if (event.key === "Enter" || event.key === "Escape") event.stopPropagation();
+		};
+		node?.addEventListener("keydown", stopKeys);
+		const focusTarget = node?.querySelector<HTMLElement>("[data-plugin-initial-focus]");
+		focusTarget?.focus({ preventScroll: true });
+		return () => {
+			window.removeEventListener("resize", onResize);
+			node?.removeEventListener("keydown", stopKeys);
+			body.style.paddingRight = previous;
+		};
+	}, [placement, boundary]);
+	const startResize = (event: ReactPointerEvent<HTMLDivElement>) => {
+		const body = boundary.body;
+		const handle = event.currentTarget;
+		handle.setPointerCapture(event.pointerId);
+		const right = body.getBoundingClientRect().right;
+		const move = (e: PointerEvent) => {
+			const px = Math.round(Math.min(Math.max(right - e.clientX, 360), body.clientWidth - 320));
+			body.style.paddingRight = `${px}px`;
+			if (frame.current) frame.current.style.width = `${px}px`;
+			try { localStorage.setItem("lh.sideSurfaceWidth", String(px)); } catch { /* private storage */ }
+		};
+		const up = () => { handle.removeEventListener("pointermove", move); handle.removeEventListener("pointerup", up); };
+		handle.addEventListener("pointermove", move);
+		handle.addEventListener("pointerup", up);
+	};
 	return <InteractionLayerOwner.Provider value={layer.id}>
 		<div ref={root} data-plugin-session-surface="" data-plugin-shortcut-owner={pluginId} data-interaction-layer={layer.id}
 			role="region" aria-label={title} style={{ display: "contents" }}>
-			<div data-plugin-session-surface-frame="" tabIndex={-1} aria-label={title}
-				className={`pointer-events-auto absolute inset-0 flex min-h-0 flex-col overflow-hidden outline-none ${background === "opaque" ? "bg-background" : "bg-background/80 backdrop-blur-sm"}`}
+			<div ref={frame} data-plugin-session-surface-frame="" data-surface-placement={placement} tabIndex={-1} aria-label={title}
+				className={`pointer-events-auto absolute ${placement === "side" ? "inset-y-0 right-0 border-l border-border" : "inset-0"} flex min-h-0 flex-col overflow-hidden outline-none ${background === "opaque" || placement === "side" ? "bg-background" : "bg-background/80 backdrop-blur-sm"}`}
 				style={{ zIndex: 100 + layer.order }}>
+			{placement === "side" && <div onPointerDown={startResize} title="Drag to resize" aria-hidden="true"
+				className="absolute inset-y-0 left-0 z-20 w-1.5 cursor-col-resize hover:bg-primary/30" />}
 			<div className="min-h-0 w-full flex-1 overflow-y-auto">{children}</div>
 			<button type="button" onClick={close} aria-label="Close" title="Close"
 				className="absolute right-2 top-2 z-10 size-7 rounded-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground">

@@ -79,9 +79,12 @@ function validateBadge({ text, color }: PluginBadgeProps) {
 	}
 }
 
-function validateSurfaceBackground({ background }: PluginSurfaceProps) {
+function validateSurfaceBackground({ background, placement }: PluginSurfaceProps) {
 	if (background !== undefined && background !== "dimmed" && background !== "opaque") {
 		throw new TypeError('Surface background must be "dimmed" or "opaque".');
+	}
+	if (placement !== undefined && placement !== "cover" && placement !== "side") {
+		throw new TypeError('Surface placement must be "cover" or "side".');
 	}
 }
 
@@ -249,7 +252,7 @@ export function createPluginUiStore() {
 					const boundary = requireSurfaceBoundary(explicitOptions ? targetOrProps as PluginSurfaceTarget : findCurrentSurfaceBoundary(document)?.target);
 					const opener = boundary.body.ownerDocument.activeElement;
 					const handle = mount(boundary.stack!.querySelector<HTMLElement>("[data-session-surface-mounts]")!, props, options,
-						(props, runtime) => <PluginSurface pluginId={pluginId} title={props.title} background={props.background} onClose={props.onClose} runtime={runtime} boundary={boundary}
+						(props, runtime) => <PluginSurface pluginId={pluginId} title={props.title} background={props.background} placement={props.placement} onClose={props.onClose} runtime={runtime} boundary={boundary}
 							opener={opener instanceof HTMLElement ? opener : null}>
 							<PluginContent content={props.content} runtime={runtime} className="h-full w-full" />
 						</PluginSurface>, boundary.signal, true, validateSurfaceBackground);

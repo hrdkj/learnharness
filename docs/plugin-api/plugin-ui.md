@@ -921,6 +921,7 @@ disposal performs cleanup without a close notification.
 export interface PluginSurfaceProps {
     title: string;
     background?: "dimmed" | "opaque";
+    placement?: "cover" | "side";
     content: PluginUiContent;
     onClose?: () => void | Promise<void>;
 }
@@ -932,6 +933,7 @@ export interface PluginSurfaceProps {
 
 - [title](#pluginsurfaceprops-title)
 - [background](#pluginsurfaceprops-background)
+- [placement](#pluginsurfaceprops-placement)
 - [content](#pluginsurfaceprops-content)
 - [onClose](#pluginsurfaceprops-onclose)
 
@@ -949,6 +951,15 @@ Defaults to the translucent, blurred Chains-like background.
 
 ```ts
 background?: "dimmed" | "opaque";
+```
+
+### PluginSurfaceProps placement
+
+"cover" (default) fills the page body. "side" docks on the right and
+shrinks the page beside it, which stays live and interactive.
+
+```ts
+placement?: "cover" | "side";
 ```
 
 ### PluginSurfaceProps content

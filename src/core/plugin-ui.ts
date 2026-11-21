@@ -123,6 +123,9 @@ export interface PluginSurfaceProps {
 	title: string;
 	/** Defaults to the translucent, blurred Chains-like background. */
 	background?: "dimmed" | "opaque";
+	/** "cover" (default) fills the page body. "side" docks on the right and
+	 * shrinks the page beside it, which stays live and interactive. */
+	placement?: "cover" | "side";
 	content: PluginUiContent;
 	onClose?: () => void | Promise<void>;
 }

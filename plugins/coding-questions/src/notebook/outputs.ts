@@ -52,7 +52,10 @@ function frameCss(host: HTMLElement): string {
   const style = getComputedStyle(host);
   const token = (name: string, fallback: string) => style.getPropertyValue(name).trim() || fallback;
   const fg = token("--foreground", "#e6e6e6"), muted = token("--muted-foreground", "#8d8d8d"), border = token("--border", "#434343");
-  return `html,body{margin:0;background:transparent;color:${fg};font:12.5px/1.45 ${token("--font-mono", "ui-monospace,monospace")};}
+  // A frame whose color-scheme differs from its parent gets an opaque white
+  // backdrop in Chromium; mirror the page's scheme so it stays transparent.
+  const scheme = style.colorScheme || "normal";
+  return `:root{color-scheme:${scheme}}html,body{margin:0;background:transparent;color:${fg};font:12.5px/1.45 ${token("--font-mono", "ui-monospace,monospace")};}
 table{border-collapse:collapse;margin:0;font-size:12px}th,td{padding:3px 10px;text-align:right;border-bottom:1px solid ${border};white-space:nowrap}
 thead th{color:${fg};font-weight:600;border-bottom:1px solid ${muted}}tbody th{color:${muted};font-weight:500}tbody tr:nth-child(odd){background:color-mix(in srgb,${fg} 4%,transparent)}
 p,div{margin:0}a{color:${fg}}`;
@@ -68,6 +71,7 @@ function htmlFrame(container: HTMLElement, html: string): void {
   frame.setAttribute("sandbox", "allow-same-origin");
   frame.setAttribute("referrerpolicy", "no-referrer");
   frame.title = "Cell output";
+  frame.style.colorScheme = getComputedStyle(container).colorScheme || "normal";
   const csp = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'">`;
   frame.srcdoc = `<!doctype html><html><head>${csp}<style>${frameCss(container)}</style></head><body>${html}</body></html>`;
   const fit = () => {

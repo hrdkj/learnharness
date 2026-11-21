@@ -36,6 +36,11 @@ export function activeAnswerTarget(sessionId: string, preferredId?: string): Ans
   return active.find(target => target.id === preferredId) ?? active.at(-1);
 }
 
+/** The most recently mounted active editor in any session. */
+export function latestActiveTarget(): AnswerTarget | undefined {
+  return [...targets].filter(target => target.isActive()).at(-1);
+}
+
 /** Opens the notebook from a problem card; installed by main.ts. */
 let opener: ((target: AnswerTarget) => void) | undefined;
 export function setNotebookOpener(next: typeof opener): void { opener = next; }
