@@ -248,7 +248,9 @@ export function mountNotebook(container: HTMLElement, options: {
     main.className = "lh-nb-main";
     const tools = document.createElement("div");
     tools.className = "lh-nb-tools";
-    const del = button(document, "Delete", "Delete cell (D, D)", "lh-nb-tool");
+    const del = button(document, "", "Delete cell (D, D)", "lh-nb-tool lh-nb-tool--delete");
+    del.setAttribute("aria-label", "Delete cell");
+    del.innerHTML = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6"/></svg>';
     tools.append(del);
     const editorHost = document.createElement("div");
     editorHost.className = "lh-nb-editor";
