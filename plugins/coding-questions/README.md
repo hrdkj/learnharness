@@ -245,7 +245,7 @@ recovery-only Dismiss, native persistence, and teacher continuation. **Dictation
 targets host thinking, never code.** Checks retain reading-before-reveal. The host
 places the learner's thinking separately from the plugin's code/result presentation.
 
-The lean CodeMirror 6 editor includes quiet line numbers, undo/redo, bracket matching,
+The lean CodeMirror 6 editor includes undo/redo, bracket matching,
 four-space Tab indentation and newline auto-indentation. **Enter and Shift+Enter insert
 a newline inside code**; **Cmd/Ctrl+Enter submits** through the host. Host thinking
 keeps Enter-to-submit and Shift+Enter-to-newline. The plugin handles editing keys only
@@ -275,7 +275,9 @@ the bundled SQL parser is not a SQL validator. Diagnostics never block submissio
 The full standard `@codemirror/language-data` catalog ships locally. Language aliases
 load highlighting on demand; unknown languages or failed loads remain usable as plain
 text. There are no highlighting downloads, language settings, or language restrictions.
-CodeMirror One Dark colors sit inside a host-themed monospace frame.
+Code looks like Google Colab's dark editor in both app themes: Colab's `#282a2c`
+background, VS Code Dark+ token colours as Colab renders them, and bracket pairs coloured
+by nesting depth. The answer editor has no line numbers; notebook cells keep them. The palette lives in `src/colab-theme.ts`.
 
 Pending questions/problems and submitted answers/attempts are durable host records. Unsubmitted code
 and thinking use **host in-memory drafts**: folding/remounting while the session model

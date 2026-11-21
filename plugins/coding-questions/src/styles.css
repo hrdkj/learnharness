@@ -1,18 +1,27 @@
 .lh-coding-prompt { margin-bottom: 0.75rem; }
+/* Code surfaces are always Colab dark, whatever the app theme. Colours match
+   COLAB in src/colab-theme.ts, which also styles the editor internals
+   (cursor, selection, gutter, active line, tokens, brackets). */
+.lh-coding-question, .lh-nb {
+  --lh-colab-bg: #282a2c;
+  --lh-colab-fg: #d4d4d4;
+  --lh-colab-border: #444746;
+  --lh-colab-muted: #858585;
+}
 .lh-coding-question {
   overflow: hidden;
   border: 1px solid var(--border, #434343);
   border-radius: 0.5rem;
-  background: var(--background, #141414);
-  color: var(--foreground, #e6e6e6);
+  background: var(--lh-colab-bg);
+  color: var(--lh-colab-fg);
 }
 .lh-coding-question__header {
   display: flex;
   justify-content: space-between;
   gap: 1rem;
   padding: 0.4rem 0.75rem;
-  border-bottom: 1px solid var(--border, #434343);
-  color: var(--muted-foreground, #8d8d8d);
+  border-bottom: 1px solid var(--lh-colab-border);
+  color: var(--lh-colab-muted);
   font-family: var(--font-mono, var(--font-ui, monospace));
   font-size: 11px;
   line-height: 1.4;
@@ -35,19 +44,8 @@
   font-variant-ligatures: var(--lh-code-ligatures, none);
   line-height: 1.6;
 }
-.lh-coding-question .cm-content { padding: 0.5rem 0; caret-color: var(--foreground, #e6e6e6); }
+.lh-coding-question .cm-content { padding: 0.5rem 0; }
 .lh-coding-question .cm-line { padding: 0 0.75rem; }
-.lh-coding-question .cm-gutters {
-  background: transparent;
-  color: var(--muted-foreground, #8d8d8d);
-  border: none;
-}
-.lh-coding-question .cm-cursor { border-left-color: var(--foreground, #e6e6e6); }
-.lh-coding-question .cm-selectionBackground,
-.lh-coding-question .cm-editor.cm-focused .cm-selectionBackground {
-  background: color-mix(in srgb, var(--foreground, #e6e6e6) 20%, transparent);
-}
-.lh-coding-question .cm-matchingBracket { background: color-mix(in srgb, var(--foreground, #e6e6e6) 18%, transparent); }
 .lh-coding-question .cm-tooltip {
   border: 1px solid var(--border, #434343);
   background: var(--popover, var(--background, #141414));
@@ -114,18 +112,16 @@
 .lh-coding-question__notebook {
   margin-left: auto;
   padding: 0 0.4rem;
-  border: 1px solid var(--border, #434343);
+  border: 1px solid var(--lh-colab-border);
   border-radius: 0.3rem;
   background: transparent;
-  color: var(--muted-foreground, #8d8d8d);
+  color: var(--lh-colab-muted);
   font: inherit;
   cursor: pointer;
 }
-.lh-coding-question__notebook:hover { color: var(--foreground, #e6e6e6); }
-.lh-coding-question .cm-activeLine { background: color-mix(in srgb, var(--foreground, #e6e6e6) 4%, transparent); }
+.lh-coding-question__notebook:hover { color: var(--lh-colab-fg); }
 .lh-coding-question .cm-panels { background: var(--muted, #262626); color: var(--foreground, #e6e6e6); border-color: var(--border, #434343); }
 .lh-coding-question .cm-searchMatch { background: color-mix(in srgb, #e5c07b 30%, transparent); }
-.lh-coding-question .cm-selectionMatch { background: color-mix(in srgb, var(--foreground, #e6e6e6) 10%, transparent); }
 
 /* Notebook overlay */
 .lh-nb {
@@ -192,23 +188,16 @@
 .lh-nb-tools .lh-nb-tool { background: var(--nb-bg); font-size: 11px; padding: 0.1rem 0.45rem; transform: translateY(-100%); }
 .lh-nb-tool--answer:not(:disabled) { border-color: #61afef; color: #61afef; }
 .lh-nb-tools .lh-nb-tool[hidden] { display: none; }
-.lh-nb-editor { border: 1px solid var(--nb-border); border-radius: 0.4rem; background: var(--nb-card); }
+.lh-nb-editor { border: 1px solid var(--lh-colab-border); border-radius: 0.4rem; background: var(--lh-colab-bg); color: var(--lh-colab-fg); }
 .lh-nb-editor[hidden], .lh-nb-rendered[hidden], .lh-nb-docs[hidden] { display: none; }
 .lh-nb-editor .cm-editor { background: transparent; color: inherit; font-size: 13.5px; }
 .lh-nb-editor .cm-editor.cm-focused { outline: none; }
 .lh-nb-editor .cm-scroller { font-family: var(--font-mono, monospace); font-variant-ligatures: var(--lh-code-ligatures, none); line-height: 1.55; min-height: 2.2em; }
-.lh-nb-editor .cm-content { padding: 0.35rem 0; caret-color: var(--nb-fg); }
+.lh-nb-editor .cm-content { padding: 0.35rem 0; }
 .lh-nb-editor .cm-line { padding: 0 0.6rem; }
-.lh-nb-editor .cm-gutters { background: transparent; color: var(--nb-muted); border: none; }
-.lh-nb-editor .cm-cursor { border-left-color: var(--nb-fg); }
-.lh-nb-editor .cm-selectionBackground, .lh-nb-editor .cm-editor.cm-focused .cm-selectionBackground { background: color-mix(in srgb, var(--nb-fg) 20%, transparent); }
-.lh-nb-editor .cm-matchingBracket { background: color-mix(in srgb, var(--nb-fg) 18%, transparent); }
-.lh-nb-editor .cm-activeLine { background: color-mix(in srgb, var(--nb-fg) 4%, transparent); }
-.lh-nb-editor .cm-activeLineGutter { background: transparent; color: var(--nb-fg); }
 .lh-nb-editor .cm-panels { background: var(--nb-bg); color: var(--nb-fg); border-color: var(--nb-border); }
 .lh-nb-editor .cm-panels input, .lh-nb-editor .cm-panels button { color: var(--nb-fg); background: transparent; border: 1px solid var(--nb-border); border-radius: 0.25rem; font: inherit; font-size: 12px; }
 .lh-nb-editor .cm-searchMatch { background: color-mix(in srgb, #e5c07b 30%, transparent); }
-.lh-nb-editor .cm-selectionMatch { background: color-mix(in srgb, var(--nb-fg) 10%, transparent); }
 .lh-nb .cm-tooltip { border: 1px solid var(--nb-border); background: var(--popover, var(--nb-bg)); color: var(--popover-foreground, var(--nb-fg)); font-family: var(--font-mono, monospace); font-size: 12px; }
 .lh-nb .cm-tooltip-autocomplete > ul > li[aria-selected] { background: color-mix(in srgb, #61afef 35%, transparent); color: var(--nb-fg); }
 .lh-nb .cm-completionDetail { color: var(--nb-muted); margin-left: 0.6rem; font-style: normal; }
@@ -230,3 +219,4 @@
 .lh-nb-output [data-fg="cyan"] { color: #56b6c2; }
 .lh-nb-output [data-fg="black"] { color: var(--nb-muted); }
 .lh-nb-footer { display: flex; justify-content: center; gap: 0.5rem; margin-top: 0.75rem; }
+

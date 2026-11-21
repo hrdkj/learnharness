@@ -13,7 +13,6 @@ import {
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { cjk } from "@streamdown/cjk";
-import { code } from "@streamdown/code";
 import { createMathPlugin } from "@streamdown/math";
 
 import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
@@ -36,6 +35,7 @@ import {
   type StreamdownProps,
 } from "streamdown";
 import { mdComponents } from "@/components/md-blocks";
+import { createColabCodePlugin } from "@/components/colab-code";
 import { repairMathForDisplay, transformMathDelimiters } from "@/src/core";
 
 export type MessageProps = HTMLAttributes<HTMLDivElement> & {
@@ -353,7 +353,8 @@ export const streamdownPlugins = {
     ...cjk,
     remarkPluginsAfter: [...cjk.remarkPluginsAfter, remarkBreaks],
   },
-  code,
+  // Colab-dark Shiki theme in both slots + bracket-pair colours (colab-code.ts).
+  code: createColabCodePlugin(),
   math: createMathPlugin({ singleDollarTextMath: true }),
 } as unknown as PluginConfig;
 

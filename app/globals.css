@@ -338,9 +338,20 @@ body {
 /* The same well on the light page, gentler: 14% black over #f5f5f3 reads as
    a heavy gray slab, 4% keeps it just darker than the page. Inline code
    shares the well, so it takes the gentler tint too. */
-.light [data-streamdown="inline-code"],
-.light [data-streamdown="code-block"] {
+.light [data-streamdown="inline-code"] {
 	background: color-mix(in oklab, var(--background) 96%, black);
+}
+/* Fenced code is always Colab dark (components/colab-code.ts), on the light
+   page too; the colour also covers the unhighlighted first paint. */
+[data-streamdown="code-block"],
+.light [data-streamdown="code-block"] {
+	background: #282a2c;
+	color: #d4d4d4;
+}
+/* Streamdown makes each highlighted line a block only when line numbers
+   are on; with them off (the default) the lines would run together. */
+[data-streamdown="code-block-body"] code > span {
+	display: block;
 }
 [data-streamdown="code-block-header"] {
 	display: none;

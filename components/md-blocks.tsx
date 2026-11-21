@@ -263,7 +263,8 @@ export function MarkdownCode(props: ComponentProps<"code"> & ExtraProps) {
 
 	const startMatch = /startLine=(\d+)/.exec(meta);
 	const startLine = startMatch ? Number.parseInt(startMatch[1]!, 10) : undefined;
-	const lineNumbers = !/\bnoLineNumbers\b/.test(meta);
+	// Colab look: no line numbers unless the fence opts in with `lineNumbers`.
+	const lineNumbers = /\blineNumbers\b/.test(meta);
 	const fallback = (
 		<div className="group/md relative" data-testid="md-code">
 			{!displayOnly && <CopyCorner className="absolute top-1.5 right-2 z-10" getText={() => source} label="Copy code" />}

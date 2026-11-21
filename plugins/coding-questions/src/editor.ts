@@ -1,11 +1,11 @@
 import { Compartment, EditorState } from "@codemirror/state";
-import { drawSelection, EditorView, lineNumbers } from "@codemirror/view";
+import { drawSelection, EditorView } from "@codemirror/view";
 import { history, indentMore, insertNewlineAndIndent } from "@codemirror/commands";
-import { bracketMatching, indentUnit, LanguageDescription, syntaxHighlighting } from "@codemirror/language";
+import { bracketMatching, indentUnit, LanguageDescription } from "@codemirror/language";
 import { languages } from "@codemirror/language-data";
-import { oneDarkHighlightStyle } from "@codemirror/theme-one-dark";
 import type { PluginQuestionAnswerState, PluginQuestionEditorHandle, PluginQuestionEditorProps, PluginProblemEditorHandle, PluginProblemEditorProps } from "learnharness-plugin-api";
 import { isReady, normalizeLineEndings, type CodingPayload, type CodingQuestionPayload } from "./contract.ts";
+import { colabLanguage, colabTheme } from "./colab-theme.ts";
 import { supportsSyntaxDiagnostics, syntaxDiagnosticsExtension } from "./diagnostics.ts";
 import { editingExtensions } from "./editor-extensions.ts";
 import { answerTargetsChanged, openNotebookFor, registerAnswerTarget, type AnswerTarget } from "./answer-targets.ts";
@@ -54,13 +54,12 @@ function createCodeView(container: HTMLElement, language: string, code: string, 
     state: EditorState.create({
       doc: normalizeLineEndings(code),
       extensions: [
-        lineNumbers(),
         history(),
         drawSelection(),
         bracketMatching(),
         EditorState.tabSize.of(4),
         indentUnit.of("    "),
-        syntaxHighlighting(oneDarkHighlightStyle),
+        colabTheme(),
         EditorView.contentAttributes.of({ "aria-label": onChange ? "Code answer" : "Submitted code" }),
         editable.of([EditorState.readOnly.of(!active), EditorView.editable.of(active)]),
         languageSupport.of([]),
@@ -81,7 +80,7 @@ function createCodeView(container: HTMLElement, language: string, code: string, 
       // Catalog support may include tag insertion, completion keymaps or other
       // editing helpers. Install only its language/parser, never those extras.
       view.dispatch({ effects: languageSupport.reconfigure([
-        support.language,
+        colabLanguage(support.language),
         ...(onChange && supportsSyntaxDiagnostics(languageDescription.name) ? [syntaxDiagnosticsExtension()] : []),
       ]) });
       status.textContent = "";

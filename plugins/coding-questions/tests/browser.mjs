@@ -38,6 +38,8 @@ const ui={mountBadge(container,props,{signal}){
  return {update,dispose};
 }};
 const cleanup = activate({ui,
+ // Notebook wiring (not exercised here): inert stubs.
+ manifest:{id:'coding-questions'},signal:new AbortController().signal,onNotification:()=>()=>{},registerAction:()=>()=>{},placeAction:()=>()=>{},call:()=>new Promise(()=>{}),
  registerQuestionRenderer(value){renderer=value;return ()=>{if(!window.host.practice)window.host.unmount();renderer=null}},
  registerProblemRenderer(value){problemRenderer=value;return ()=>{if(window.host.practice)window.host.unmount();problemRenderer=null}}
 });
@@ -112,12 +114,8 @@ try {
   assert.equal((await state()).status,"unready");
   assert.equal((await state()).value," \t\n");
   await fillCode("x");
-  const gutter = await page.$eval('#editor .cm-gutters', node => {
-    const style = getComputedStyle(node);
-    return { background: style.backgroundColor, borders: [style.borderTopWidth, style.borderRightWidth, style.borderBottomWidth, style.borderLeftWidth] };
-  });
-  assert.equal(gutter.background, 'rgba(0, 0, 0, 0)');
-  assert.deepEqual(gutter.borders, ['0px', '0px', '0px', '0px']);
+  assert.equal(await page.$$eval('#editor .cm-gutters', nodes => nodes.length), 0, 'The answer editor has no line numbers (Colab look)');
+  assert.equal(await page.$eval('#editor .lh-coding-question', node => getComputedStyle(node).backgroundColor), 'rgb(40, 42, 44)', 'Colab background');
   const size = await page.$eval('#editor .cm-scroller', node => {
     const style = getComputedStyle(node);
     return { minHeight: parseFloat(style.minHeight), fontSize: parseFloat(style.fontSize), height: node.getBoundingClientRect().height };

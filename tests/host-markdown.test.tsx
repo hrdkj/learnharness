@@ -6,11 +6,11 @@ import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { parseHTML } from "linkedom";
 import mermaid from "mermaid";
-import { code, type HighlightResult } from "@streamdown/code";
+import type { HighlightResult } from "@streamdown/code";
 import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared-runtime.js";
 import { PathnameContext } from "next/dist/shared/lib/hooks-client-context.shared-runtime.js";
 import { HostMarkdown } from "../components/host-markdown.tsx";
-import { MessageResponse } from "../components/ai-elements/message.tsx";
+import { MessageResponse, streamdownPlugins } from "../components/ai-elements/message.tsx";
 import { MermaidError } from "../components/mermaid-error.tsx";
 import { InteractionLayersProvider } from "../components/interaction-layers.tsx";
 import { PluginsProvider, createPluginWindowOwner } from "../components/plugins.tsx";
@@ -19,7 +19,7 @@ import { SessionMermaidContext } from "../components/session-overlay.tsx";
 import type { PluginFrontendModule, PluginInfo } from "../src/core/index.ts";
 import { installModalDom } from "./modal-dom.ts";
 
-const source = "## Heading **ink**\n\nFirst line\nsecond line with `inline` and *emphasis*.\n\n> [!IMPORTANT]\n> Preserve this idea.\n\n| A | B |\n| --- | --- |\n| one | two |\n\n$x^2$ and \\(y^2\\).\n\n$$\n\\int_0^1 x^2\\,dx = \\tfrac13\n$$\n\n```js startLine=4\nconst answer = 42;\n```\n\n![Alt text](https://example.invalid/image.png \"Image title\")\n\n[Ordinary link](https://example.invalid/page)";
+const source = "## Heading **ink**\n\nFirst line\nsecond line with `inline` and *emphasis*.\n\n> [!IMPORTANT]\n> Preserve this idea.\n\n| A | B |\n| --- | --- |\n| one | two |\n\n$x^2$ and \\(y^2\\).\n\n$$\n\\int_0^1 x^2\\,dx = \\tfrac13\n$$\n\n```js lineNumbers startLine=4\nconst answer = 42;\n```\n\n![Alt text](https://example.invalid/image.png \"Image title\")\n\n[Ordinary link](https://example.invalid/page)";
 const noControls = (container: ParentNode) => {
 	assert.equal(container.querySelector("button, details, summary, input, select, textarea, [role='button'], [data-streamdown='link-safety-modal']"), null, "display-only means controls never mount, not CSS-hidden controls");
 	assert.equal(container.querySelector("[data-testid='md-copy'], [data-testid='md-mermaid-expand'], [data-plugin-renderer], [data-streamdown='code-block-actions']"), null);
@@ -94,6 +94,13 @@ it("SSRs the real host message pipeline with prose, math, code, callouts, tables
 	const link = doc.querySelector("a")!; assert.equal(link.getAttribute("href"), "https://example.invalid/page");
 	assert.equal(link.getAttribute("target"), "_blank"); assert.equal(link.getAttribute("rel"), "noopener noreferrer");
 	noControls(doc);
+});
+
+it("fenced code has no line numbers unless the fence opts in with lineNumbers", () => {
+	const html = renderToStaticMarkup(<HostMarkdown text={"```python\nx = 1\n```"} />);
+	const { document: doc } = parseHTML(`<html><body>${html}</body></html>`);
+	const block = doc.querySelector("[data-streamdown='code-block-body']")!;
+	assert.ok(block.textContent?.includes("x = 1")); assert.doesNotMatch(block.innerHTML, /counter-reset|counter\(line\)/);
 });
 
 it("shares raw-HTML sanitization and URL hardening with MessageResponse, rather than using a second parser", () => {
@@ -212,6 +219,7 @@ it("late diagram results cannot promote after a complete-text update or disposal
 
 it("shared asynchronous highlighting paints current tokens, never callbacks from retired snapshots", async t => {
 	const callbacks = new Map<string, (result: HighlightResult) => void>();
+	const code = streamdownPlugins.code!;
 	t.mock.method(code, "highlight", (options: Parameters<typeof code.highlight>[0], callback?: (result: HighlightResult) => void) => { if (callback) callbacks.set(options.code, callback); return null; });
 	const f = await fixture();
 	try {

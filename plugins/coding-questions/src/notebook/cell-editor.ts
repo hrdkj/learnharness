@@ -1,10 +1,10 @@
 import { acceptCompletion, autocompletion, completionKeymap, completionStatus, startCompletion, type Completion, type CompletionContext, type CompletionResult } from "@codemirror/autocomplete";
 import { history, indentLess, indentMore } from "@codemirror/commands";
 import { python } from "@codemirror/lang-python";
-import { bracketMatching, indentUnit, syntaxHighlighting } from "@codemirror/language";
+import { bracketMatching, indentUnit } from "@codemirror/language";
 import { EditorState, Prec } from "@codemirror/state";
-import { oneDarkHighlightStyle } from "@codemirror/theme-one-dark";
 import { drawSelection, EditorView, keymap, lineNumbers, placeholder } from "@codemirror/view";
+import { colabLanguage, colabTheme } from "../colab-theme.ts";
 import { syntaxDiagnosticsExtension } from "../diagnostics.ts";
 import { editingExtensions } from "../editor-extensions.ts";
 import { stripAnsi } from "../notebook-model.ts";
@@ -91,13 +91,13 @@ export function createCellEditor(parent: HTMLElement, options: {
       doc: options.source,
       extensions: [
         cellKeys,
-        ...(code ? [lineNumbers(), python(), syntaxDiagnosticsExtension(), autocompletion({ override: [kernelCompletions(options.kernel)], activateOnTyping: true, defaultKeymap: false, icons: true }), keymap.of(completionKeymap)] : [EditorView.lineWrapping, placeholder("Text (Markdown)…")]),
+        ...(code ? [lineNumbers(), colabLanguage(python().language), syntaxDiagnosticsExtension(), autocompletion({ override: [kernelCompletions(options.kernel)], activateOnTyping: true, defaultKeymap: false, icons: true }), keymap.of(completionKeymap)] : [EditorView.lineWrapping, placeholder("Text (Markdown)…")]),
         history(),
         drawSelection(),
         bracketMatching(),
         EditorState.tabSize.of(4),
         indentUnit.of("    "),
-        syntaxHighlighting(oneDarkHighlightStyle),
+        colabTheme(),
         ...editingExtensions(new Set(["Escape", "Mod-Enter", "Shift-Enter", "Alt-Enter", "Tab", "Shift-Tab"])),
         EditorView.contentAttributes.of({ "aria-label": code ? "Code cell" : "Text cell", spellcheck: code ? "false" : "true" }),
         EditorView.updateListener.of(update => {
