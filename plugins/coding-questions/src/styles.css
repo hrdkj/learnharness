@@ -223,3 +223,18 @@
 /* Submit is the primary per-cell action now that the notebook sits beside the chat. */
 .lh-nb-tool--submit { border-color: #3b82f6; background: #2563eb; color: #fff; }
 .lh-nb-tool--submit:hover:not(:disabled) { background: #1d4ed8; }
+
+/* Exam questions: SEEK-style answer box. */
+.lh-value { display: flex; flex-direction: column; gap: 0.5rem; font-size: 13px; }
+.lh-value__header { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; color: var(--muted-foreground, #8d8d8d); font-size: 12px; }
+.lh-value__input {
+  width: 100%; padding: 0.55rem 0.75rem; border: 1px solid var(--border, #434343); border-radius: 0.4rem;
+  background: var(--background, #141414); color: var(--foreground, #e6e6e6);
+  font: 15px/1.3 var(--font-mono, ui-monospace, monospace);
+}
+.lh-value__input:focus { outline: 2px solid color-mix(in srgb, #3b82f6 60%, transparent); outline-offset: 1px; }
+.lh-value__options { display: flex; flex-direction: column; gap: 0.35rem; }
+.lh-value__option { display: flex; align-items: flex-start; gap: 0.5rem; padding: 0.45rem 0.6rem; border: 1px solid var(--border, #434343); border-radius: 0.4rem; cursor: pointer; }
+.lh-value__option:has(input:checked) { border-color: #3b82f6; background: color-mix(in srgb, #3b82f6 10%, transparent); }
+.lh-value__hint { margin: 0; color: var(--muted-foreground, #8d8d8d); font-size: 12px; }
+.lh-value__submitted { font: 15px/1.3 var(--font-mono, ui-monospace, monospace); }

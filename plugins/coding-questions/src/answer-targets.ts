@@ -7,6 +7,8 @@ export interface AnswerTarget {
   readonly id: string;
   readonly kind: "question" | "problem";
   readonly statement: string;
+  /** "value": exam questions take the cell's result, not its code. */
+  readonly accepts?: "code" | "value";
   readonly payload: Pick<CodingPayload, "language" | "notebookSetup">;
   isActive(): boolean;
   setCode(code: string): void;

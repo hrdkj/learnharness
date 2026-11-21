@@ -237,6 +237,26 @@ plugins keep an active problem unavailable rather than substituting a native tex
 the learner can use native practice dismissal. Escape in code leaves for thinking;
 Escape outside uses the native practice confirmation/layer precedence.
 
+## Exam questions (OPPE/SEEK style)
+
+`exam_question` (teaching) and `exam_problem` (practice) grade **the value, not the code**.
+The learner works in the docked notebook however they like, then types a number, picks one
+of `options`, or types a short name. Numbers are checked within `tolerance` (default 0 for
+integer answers, 0.01 otherwise) and accept pasted notebook output such as
+`np.float64(0.386)` or `4,000`. Text and options ignore case, quotes and spacing.
+
+The correct value comes from `payload.answer` (a known key, such as a paper's answer
+sheet) or from `payload.reference`: Python that runs after `notebookSetup` in a fresh
+process under **Notebook Python** and assigns `answer`. It runs on the first submission,
+and the result is cached under `<plugin data>/exam-answers/<id>.json`. The
+`compute_answer` tool runs the same pair so the tutor can check a generated question
+before posing it. A cell's **Submit** sends that cell's result (its last value, or else
+its last printed line) instead of its code.
+
+Practice shows only Correct/Incorrect. The tutor receives the expected value, calls
+`read_notebook` and coaches from the learner's own cells. Teaching questions show the
+correct value after answering.
+
 ## Editor and native question behavior
 
 The host supplies Markdown question presentation, the card, reveal/folding, thinking

@@ -68,6 +68,22 @@ function title(statement: string): string {
   return line.length > 70 ? `${line.slice(0, 67)}…` : line;
 }
 
+/** The value a cell produced: its last result, else its last printed line. */
+function cellValue(cell: NotebookCell): string | undefined {
+  for (const output of [...cell.outputs].reverse()) {
+    if (output.output_type === "execute_result") {
+      const plain = output.data["text/plain"];
+      const text = (Array.isArray(plain) ? plain.join("") : typeof plain === "string" ? plain : "").trim();
+      if (text) return text.replace(/^(?:np\.|numpy\.)?(?:float|int|uint|bool_|str_)\d*\((.*)\)$/s, "$1").replace(/^'(.*)'$/s, "$1");
+    }
+    if (output.output_type === "stream" && output.name === "stdout") {
+      const line = output.text.trim().split("\n").at(-1)?.trim();
+      if (line) return line;
+    }
+  }
+  return undefined;
+}
+
 /** Mount the notebook into a surface body. Returns cleanup. */
 export function mountNotebook(container: HTMLElement, options: {
   ctx: PluginFrontendContext;
@@ -227,7 +243,11 @@ export function mountNotebook(container: HTMLElement, options: {
     const cell = controller.cell(id);
     const target = activeAnswerTarget(controller.sessionId, currentProblemId);
     if (!cell || !target) return;
-    target.setCode(cell.source);
+    if (target.accepts === "value") {
+      const value = cellValue(cell);
+      if (value === undefined) { controller.message = "Run the cell first: its result is what gets submitted."; updateStatus(); return; }
+      target.setCode(value);
+    } else target.setCode(cell.source);
     void controller.saveNow();
     if (!submit) return;
     // The host owns submission; press its practice Submit once the draft is ready.
@@ -235,7 +255,7 @@ export function mountNotebook(container: HTMLElement, options: {
     const press = () => {
       const send = document.querySelector<HTMLButtonElement>('[data-testid="practice-send"], [data-testid="plugin-question-send"]');
       if (send && !send.disabled) { send.click(); return; }
-      if (++tries < 30) setTimeout(press, 50);
+      if (++tries < 200) setTimeout(press, 50); // the dock stays disabled while a tutor turn finishes
     };
     requestAnimationFrame(press);
   };
@@ -326,7 +346,11 @@ export function mountNotebook(container: HTMLElement, options: {
     view.run.hidden = cell.type !== "code";
     view.count.textContent = cell.type !== "code" ? "" : state === "queued" || state === "running" ? "[*]" : cell.executionCount === null ? "[ ]" : `[${cell.executionCount}]`;
     view.answer.hidden = view.submit.hidden = cell.type !== "code";
-    view.answer.disabled = view.submit.disabled = !activeAnswerTarget(controller.sessionId, currentProblemId);
+    const target = activeAnswerTarget(controller.sessionId, currentProblemId);
+    view.answer.disabled = view.submit.disabled = !target;
+    const what = target?.accepts === "value" ? "this cell's result" : "this cell";
+    view.answer.title = `Put ${what} in the answer box`;
+    view.submit.title = `Put ${what} in the answer box and submit it`;
     // Outputs: re-render only when the array or its length changed.
     const key = `${cell.outputs.length}:${cell.outputs.map(o => o.output_type === "stream" ? o.text.length : 1).join(",")}`;
     if (view.outputsKey !== key) { view.outputsKey = key; renderOutputs(view.outputs, cell.outputs); }

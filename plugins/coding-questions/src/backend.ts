@@ -1,7 +1,9 @@
+import fs from "node:fs";
 import path from "node:path";
 import type { PluginBackendContext } from "learnharness-plugin-api";
 import { definition, instructions, notebookInstructions, practiceInstructions, problemDefinition, readTests } from "./contract.ts";
 import { runTests } from "./runner.ts";
+import { compareValue, readReferenceOutput, readValuePayload, referenceProgram, valuePracticeInstructions, valueProblemDefinition, valueQuestionDefinition, valueTeachInstructions, type ValueAnswer, type ValuePayload, type ValueResult } from "./value.ts";
 import { Kernels } from "./kernels.ts";
 import { notebookAsText } from "./notebook-model.ts";
 import { NotebookStore, pythonPathError, readSettings, sessionIdFrom, writeSettings } from "./notebook-store.ts";
@@ -39,8 +41,8 @@ export function activate(ctx: PluginBackendContext): () => void {
       });
     },
   });
-  const unregisterPracticeInstructions = ctx.registerInstructions({ agents: ["practice"], text: practiceInstructions + " " + notebookInstructions });
-  const unregisterInstructions = ctx.registerInstructions({ agents: ["teacher"], text: instructions + " " + notebookInstructions });
+  const unregisterPracticeInstructions = ctx.registerInstructions({ agents: ["practice"], text: practiceInstructions + " " + notebookInstructions + " " + valuePracticeInstructions });
+  const unregisterInstructions = ctx.registerInstructions({ agents: ["teacher"], text: instructions + " " + notebookInstructions + " " + valueTeachInstructions });
 
   // Notebook: settings, per-session .ipynb files and one Jupyter kernel per session.
   let settings = readSettings(ctx.dataDirectory);
@@ -51,6 +53,51 @@ export function activate(ctx: PluginBackendContext): () => void {
     idleMs: IDLE_MS,
     emit: (sessionId, event) => { if (!ctx.signal.aborted) ctx.events.emit("kernel", { sessionId, event }); },
   });
+  // Exam questions: the value is the grade; code is only read for coaching.
+  const answersDirectory = path.join(ctx.dataDirectory, "exam-answers");
+  const computeReference = async (setup: string, reference: string, signal?: AbortSignal): Promise<{ answer: ValueAnswer } | { error: string }> => {
+    if (!settings.python) return { error: "Set Notebook Python in the Coding questions settings first." };
+    const run = await runTests({
+      dataDirectory: ctx.dataDirectory, questionId: `compute-${Date.now().toString(36)}`, answer: "",
+      tests: { program: settings.python, args: ["-"], code: referenceProgram(setup, reference) }, signal,
+    });
+    const read = readReferenceOutput(run.stdout);
+    if ("answer" in read) return read;
+    const detail = run.stderr.trim().split("\n").slice(-8).join("\n") || run.message || "";
+    return { error: read.error + (detail ? `\n${detail}` : "") };
+  };
+  const expectedFor = async (id: string, payload: ValuePayload, signal?: AbortSignal): Promise<{ answer: ValueAnswer } | { error: string }> => {
+    if (payload.answer !== undefined) return { answer: payload.answer };
+    const cache = SESSION_ID_SAFE.test(id) ? path.join(answersDirectory, `${id}.json`) : undefined;
+    if (cache) {
+      try {
+        const saved = JSON.parse(fs.readFileSync(cache, "utf8")) as { answer?: unknown };
+        if (typeof saved.answer === "number" || typeof saved.answer === "string") return { answer: saved.answer };
+      } catch { /* not computed yet */ }
+    }
+    const computed = await computeReference(payload.notebookSetup ?? "", payload.reference ?? "", signal);
+    if (cache && "answer" in computed) {
+      fs.mkdirSync(answersDirectory, { recursive: true });
+      fs.writeFileSync(cache, JSON.stringify(computed));
+    }
+    return computed;
+  };
+  const gradeValue = async (id: string, rawPayload: unknown, submission: unknown, signal?: AbortSignal): Promise<ValueResult> => {
+    if (typeof submission !== "string") throw new Error("Exam answers must be strings.");
+    const payload = readValuePayload(rawPayload);
+    const expected = await expectedFor(id, payload, signal);
+    if ("error" in expected) return { status: "error", submitted: submission.trim(), message: `Could not compute the correct answer: ${expected.error}` };
+    return compareValue(payload, expected.answer, submission);
+  };
+  const unregisterValueQuestion = ctx.registerQuestionType({
+    ...valueQuestionDefinition,
+    gradeAnswer: context => gradeValue(context.questionId, context.input.payload, context.answer, context.signal) as never,
+  });
+  const unregisterValueProblem = ctx.registerProblemType({
+    ...valueProblemDefinition,
+    processSubmission: context => gradeValue(context.problemId, context.input.payload, context.submission, context.signal) as never,
+  });
+
   const handlers = [
     ctx.handle("get-settings", () => ({ ...settings })),
     ctx.handle("set-python", input => {
@@ -88,6 +135,26 @@ export function activate(ctx: PluginBackendContext): () => void {
   const unregisterTools = ctx.registerTools({
     agents: ["teacher", "practice"],
     create: context => [{
+      name: "compute_answer",
+      label: "Compute answer",
+      description: "Run Python in a fresh process (the Notebook Python, not the learner's kernel): notebookSetup, then reference, which must assign `answer`. Returns the value or the error. Use it to check an exam question before posing it, or to work out a value for a fresh variant. Keep it light: no large grids.",
+      parameters: {
+        type: "object",
+        properties: {
+          notebookSetup: { type: "string", description: "The same setup you will put in the question (imports, pd.read_csv by absolute path)." },
+          reference: { type: "string", description: "Python that assigns the variable `answer`." },
+        },
+        required: ["reference"],
+        additionalProperties: false,
+      },
+      execute: async (_toolCallId: string, input: unknown, signal?: AbortSignal) => {
+        const setup = field(input, "notebookSetup"), reference = field(input, "reference");
+        if (typeof reference !== "string") throw new Error("reference must be a string.");
+        const result = await computeReference(typeof setup === "string" ? setup : "", reference, signal);
+        const text = "answer" in result ? `answer = ${JSON.stringify(result.answer)}` : `Error: ${result.error}`;
+        return { content: [{ type: "text" as const, text }], details: {} };
+      },
+    }, {
       name: "read_notebook",
       label: "Read notebook",
       description: "Read the learner's scratch Python notebook for this session: every cell's source and its text outputs (last 40 cells, each output capped at 2 KB). Use it before giving a hint or after repeated test failures to see what the learner tried. Read-only; it never runs code.",
@@ -107,6 +174,8 @@ export function activate(ctx: PluginBackendContext): () => void {
     unregisterPracticeInstructions();
     unregisterProblem();
     unregisterQuestion();
+    unregisterValueProblem();
+    unregisterValueQuestion();
   };
 }
 

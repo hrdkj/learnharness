@@ -18,7 +18,7 @@ test("practice processor observes repeated submissions, keeps thinking/solution 
     ...notebookHost(),
     dataDirectory,
     registerQuestionType() { return () => { disposed++; }; },
-    registerProblemType(value: PluginProblemTypeDefinition) { processSubmission = value.processSubmission!; return () => { disposed++; }; },
+    registerProblemType(value: PluginProblemTypeDefinition) { if (value.id === "code") processSubmission = value.processSubmission!; return () => { disposed++; }; },
     registerInstructions() { return () => { disposed++; }; },
   } as unknown as PluginBackendContext);
   t.after(() => { if (!disposed) cleanup(); });
@@ -59,5 +59,5 @@ if(scope.square(3)!==9){console.error('Expected 9');process.exitCode=1;}else con
   assert.deepEqual(await readdir(path.join(dataDirectory, "test-runs", context.problemId)), []);
   await assert.rejects(Promise.resolve().then(() => processSubmission(context)), { name: "AbortError" });
   cleanup();
-  assert.equal(disposed, 4);
+  assert.equal(disposed, 6);
 });

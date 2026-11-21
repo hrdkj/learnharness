@@ -5,6 +5,7 @@ import type { PluginBackendContext, PluginQuestionTypeDefinition } from "learnha
 import { activate } from "../src/backend.ts";
 import { definition, instructions, notebookInstructions, practiceInstructions, problemDefinition, isReady, normalizeLineEndings, readTests } from "../src/contract.ts";
 import { notebookHost } from "./notebook-host.ts";
+import { valuePracticeInstructions, valueTeachInstructions } from "../src/value.ts";
 import { findLanguage } from "../src/editor.ts";
 
 const question = Compile(definition.questionSchema);
@@ -30,18 +31,20 @@ test("teacher question and practice problem register separately with role-scoped
   assert.equal(typeof processSubmission, "function");
   assert.deepEqual(problemRest, problemDefinition);
   assert.equal(problemDefinition.tool.toolName, "coding_problem");
-  assert.deepEqual(calls[2], { agents: ["practice"], text: practiceInstructions + " " + notebookInstructions });
-  assert.deepEqual(calls[3], { agents: ["teacher"], text: instructions + " " + notebookInstructions });
-  const tools = calls[4] as { agents: string[]; create(context: { chatId: string; agent: string }): { name: string }[] };
+  assert.deepEqual(calls[2], { agents: ["practice"], text: practiceInstructions + " " + notebookInstructions + " " + valuePracticeInstructions });
+  assert.deepEqual(calls[3], { agents: ["teacher"], text: instructions + " " + notebookInstructions + " " + valueTeachInstructions });
+  assert.equal((calls[4] as { id: string; gradeAnswer: unknown }).id, "value");
+  assert.equal((calls[5] as { id: string; processSubmission: unknown }).id, "value");
+  const tools = calls[6] as { agents: string[]; create(context: { chatId: string; agent: string }): { name: string }[] };
   assert.deepEqual(tools.agents, ["teacher", "practice"]);
-  assert.deepEqual(tools.create({ chatId: "fixture", agent: "teacher" }).map(tool => tool.name), ["read_notebook"]);
+  assert.deepEqual(tools.create({ chatId: "fixture", agent: "teacher" }).map(tool => tool.name), ["compute_answer", "read_notebook"]);
   assert.equal(definition.teach.toolName, "coding_question");
   assert.equal("probe" in definition, false);
   assert.equal("execute" in definition, false);
   assert.equal(definition.showThinking, true);
   assert.equal("validateAnswer" in definition, false);
   cleanup();
-  assert.deepEqual(calls.slice(5), ["tools disposed", "instructions disposed", "instructions disposed", "problem disposed", "question disposed"]);
+  assert.deepEqual(calls.slice(7), ["tools disposed", "instructions disposed", "instructions disposed", "problem disposed", "question disposed", "problem disposed", "question disposed"]);
 });
 
 test("practice requires language and tests, shares the code schema and keeps the solution in host common fields", () => {

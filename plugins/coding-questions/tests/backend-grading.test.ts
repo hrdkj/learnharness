@@ -36,7 +36,7 @@ test("public registered grader executes the supplied recipe after submission, re
   const cleanup = activate({
     ...notebookHost(),
     dataDirectory,
-    registerQuestionType(value: PluginQuestionTypeDefinition) { assert.equal(typeof value.gradeAnswer, "function"); grade = value.gradeAnswer!; return () => { disposed++; }; },
+    registerQuestionType(value: PluginQuestionTypeDefinition) { assert.equal(typeof value.gradeAnswer, "function"); if (value.id === "code") grade = value.gradeAnswer!; return () => { disposed++; }; },
     registerProblemType() { return () => { disposed++; }; },
     registerInstructions() { return () => { disposed++; }; },
   } as unknown as PluginBackendContext);
@@ -72,5 +72,5 @@ test("public registered grader executes the supplied recipe after submission, re
   controller.abort();
   await assert.rejects(Promise.resolve().then(() => grade(context)), { name: "AbortError" });
   cleanup();
-  assert.equal(disposed, 4);
+  assert.equal(disposed, 6);
 });

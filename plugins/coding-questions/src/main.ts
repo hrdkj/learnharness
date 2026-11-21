@@ -6,6 +6,8 @@ import { mountModelSolution } from "./solution-view.ts";
 import { mountSavedQuestion } from "./question-view.ts";
 import { readTestResult, type CodingTestResult } from "./test-result.ts";
 import { activateNotebook } from "./notebook/entry.ts";
+import { VALUE_TYPE_ID, type ValuePayload, type ValueQuestionPayload } from "./value.ts";
+import { mountValueAnswerEditor, mountValueSubmissionEditor, mountValueSubmitted } from "./value-view.ts";
 
 function mountRecordedTests(container: HTMLElement, ctx: PluginFrontendContext, outcome: { result: unknown } | { error: string }, signal: AbortSignal, headerContainer?: HTMLElement): () => void {
   const result = "result" in outcome ? readTestResult(outcome.result) : null;
@@ -61,6 +63,34 @@ export function activate(ctx: PluginFrontendContext): () => void {
       } catch (error) { dispose(); throw error; }
     },
   } satisfies PluginProblemRenderer<CodingPayload, string>);
+  const unregisterValueQuestion = ctx.registerQuestionRenderer({
+    id: VALUE_TYPE_ID,
+    supportedContractVersions: [1],
+    mountAnswerEditor: mountValueAnswerEditor,
+    mountAnswered(container, props) {
+      if (props.signal.aborted) return;
+      const cleanups: (() => void)[] = [];
+      const dispose = () => { for (const cleanup of cleanups.splice(0).reverse()) cleanup(); };
+      try {
+        cleanups.push(mountSavedQuestion(container, ctx.ui, props.input.question, props.signal));
+        cleanups.push(mountValueSubmitted(container, ctx.ui, props.answer, props.grading, props.signal, { headerContainer: props.headerContainer, revealExpected: true }));
+        cleanups.push(mountModelSolution(props.footerContainer ?? container, ctx.ui, props.input.payload.modelSolution, props.signal));
+        return dispose;
+      } catch (error) { dispose(); throw error; }
+    },
+  } satisfies PluginQuestionRenderer<ValueQuestionPayload, string>);
+  const unregisterValueProblem = ctx.registerProblemRenderer({
+    id: VALUE_TYPE_ID,
+    supportedContractVersions: [1],
+    mountSubmissionEditor: mountValueSubmissionEditor,
+    mountSubmitted(container, props) {
+      if (props.signal.aborted) return;
+      return mountValueSubmitted(container, ctx.ui, props.submission, props.processing, props.signal, { headerContainer: props.headerContainer, revealExpected: false });
+    },
+  } satisfies PluginProblemRenderer<ValuePayload, string>);
   const disposeNotebook = activateNotebook(ctx);
-  return () => { try { disposeNotebook(); } finally { try { unregisterProblem(); } finally { unregisterQuestion(); } } };
+  return () => {
+    try { disposeNotebook(); }
+    finally { try { unregisterValueProblem(); unregisterValueQuestion(); } finally { try { unregisterProblem(); } finally { unregisterQuestion(); } } }
+  };
 }
