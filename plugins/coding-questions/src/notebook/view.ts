@@ -20,8 +20,6 @@ interface CellView {
   rendered: HTMLElement;
   docs: HTMLElement;
   outputs: HTMLElement;
-  answer: HTMLButtonElement;
-  submit: HTMLButtonElement;
   editor?: EditorView;
   markdown?: PluginWidgetHandle<PluginMarkdownProps>;
   editingMarkdown: boolean;
@@ -66,22 +64,6 @@ function button(document: Document, label: string, title: string, className = "l
 function title(statement: string): string {
   const line = statement.split("\n").map(part => part.replace(/[#*_`>]/g, "").trim()).find(Boolean) ?? "Problem";
   return line.length > 70 ? `${line.slice(0, 67)}…` : line;
-}
-
-/** The value a cell produced: its last result, else its last printed line. */
-function cellValue(cell: NotebookCell): string | undefined {
-  for (const output of [...cell.outputs].reverse()) {
-    if (output.output_type === "execute_result") {
-      const plain = output.data["text/plain"];
-      const text = (Array.isArray(plain) ? plain.join("") : typeof plain === "string" ? plain : "").trim();
-      if (text) return text.replace(/^(?:np\.|numpy\.)?(?:float|int|uint|bool_|str_)\d*\((.*)\)$/s, "$1").replace(/^'(.*)'$/s, "$1");
-    }
-    if (output.output_type === "stream" && output.name === "stdout") {
-      const line = output.text.trim().split("\n").at(-1)?.trim();
-      if (line) return line;
-    }
-  }
-  return undefined;
 }
 
 /** Mount the notebook into a surface body. Returns cleanup. */
@@ -239,27 +221,6 @@ export function mountNotebook(container: HTMLElement, options: {
     commandMode();
   };
 
-  const useAsAnswer = (id: string, submit = false) => {
-    const cell = controller.cell(id);
-    const target = activeAnswerTarget(controller.sessionId, currentProblemId);
-    if (!cell || !target) return;
-    if (target.accepts === "value") {
-      const value = cellValue(cell);
-      if (value === undefined) { controller.message = "Run the cell first: its result is what gets submitted."; updateStatus(); return; }
-      target.setCode(value);
-    } else target.setCode(cell.source);
-    void controller.saveNow();
-    if (!submit) return;
-    // The host owns submission; press its practice Submit once the draft is ready.
-    let tries = 0;
-    const press = () => {
-      const send = document.querySelector<HTMLButtonElement>('[data-testid="practice-send"], [data-testid="plugin-question-send"]');
-      if (send && !send.disabled) { send.click(); return; }
-      if (++tries < 200) setTimeout(press, 50); // the dock stays disabled while a tutor turn finishes
-    };
-    requestAnimationFrame(press);
-  };
-
   // Seed (and run) the setup of whichever problem is active, once per problem.
   let currentProblemId = options.problem?.id;
   const seedProblem = (problem: { id: string; statement: string } | undefined, setup: string | undefined) => {
@@ -287,12 +248,8 @@ export function mountNotebook(container: HTMLElement, options: {
     main.className = "lh-nb-main";
     const tools = document.createElement("div");
     tools.className = "lh-nb-tools";
-    const answer = button(document, "Use as answer", "Copy this cell into the answer editor", "lh-nb-tool lh-nb-tool--answer");
-    const submit = button(document, "Submit", "Copy this cell into the answer editor and submit it", "lh-nb-tool lh-nb-tool--answer lh-nb-tool--submit");
-    const up = button(document, "↑", "Move cell up (Ctrl+M K)", "lh-nb-tool");
-    const down = button(document, "↓", "Move cell down (Ctrl+M J)", "lh-nb-tool");
     const del = button(document, "Delete", "Delete cell (D, D)", "lh-nb-tool");
-    tools.append(submit, answer, up, down, del);
+    tools.append(del);
     const editorHost = document.createElement("div");
     editorHost.className = "lh-nb-editor";
     const rendered = document.createElement("div");
@@ -306,7 +263,7 @@ export function mountNotebook(container: HTMLElement, options: {
     main.append(tools, editorHost, rendered, docs, outputs);
     root.append(gutter, main);
 
-    const view: CellView = { id: cell.id, root, run, count, editorHost, rendered, docs, outputs, answer, submit, editingMarkdown: true, type: cell.type };
+    const view: CellView = { id: cell.id, root, run, count, editorHost, rendered, docs, outputs, editingMarkdown: true, type: cell.type };
     view.editor = createCellEditor(editorHost, {
       source: cell.source,
       kind: cell.type,
@@ -322,10 +279,6 @@ export function mountNotebook(container: HTMLElement, options: {
       },
     });
     run.addEventListener("click", () => { select(cell.id); runCell(cell.id); });
-    answer.addEventListener("click", () => useAsAnswer(cell.id));
-    submit.addEventListener("click", () => useAsAnswer(cell.id, true));
-    up.addEventListener("click", () => controller.move(cell.id, -1));
-    down.addEventListener("click", () => controller.move(cell.id, 1));
     del.addEventListener("click", () => remove(cell.id));
     rendered.addEventListener("dblclick", () => edit(cell.id));
     root.addEventListener("mousedown", event => {
@@ -345,12 +298,6 @@ export function mountNotebook(container: HTMLElement, options: {
     view.run.title = state === "running" ? "Interrupt (Ctrl+M I)" : "Run cell (Ctrl+Enter)";
     view.run.hidden = cell.type !== "code";
     view.count.textContent = cell.type !== "code" ? "" : state === "queued" || state === "running" ? "[*]" : cell.executionCount === null ? "[ ]" : `[${cell.executionCount}]`;
-    view.answer.hidden = view.submit.hidden = cell.type !== "code";
-    const target = activeAnswerTarget(controller.sessionId, currentProblemId);
-    view.answer.disabled = view.submit.disabled = !target;
-    const what = target?.accepts === "value" ? "this cell's result" : "this cell";
-    view.answer.title = `Put ${what} in the answer box`;
-    view.submit.title = `Put ${what} in the answer box and submit it`;
     // Outputs: re-render only when the array or its length changed.
     const key = `${cell.outputs.length}:${cell.outputs.map(o => o.output_type === "stream" ? o.text.length : 1).join(",")}`;
     if (view.outputsKey !== key) { view.outputsKey = key; renderOutputs(view.outputs, cell.outputs); }

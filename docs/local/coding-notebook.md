@@ -12,12 +12,12 @@ describes what was actually built.
   It opens automatically when a Python coding or exam question mounts, appends that question's
   `notebookSetup` cell and runs it.
 - **Coding questions** (`coding_question` / `coding_problem`). Code is graded by the tutor's test
-  recipe. A cell's **Submit** copies the cell's code into the answer editor and presses the host Submit.
+  recipe.
 - **Exam questions** (`exam_question` / `exam_problem`), in OPPE/SEEK style. The learner types a
   number, picks an option or types a name, and only the value is graded, within a tolerance. The
   correct value is either `payload.answer` (a stored key) or `payload.reference` (Python that assigns
   `answer`, run after `notebookSetup` in a fresh Notebook Python process on the first submit and
-  cached). A cell's **Submit** sends the cell's result, not its code.
+  cached). The learner types the value into the answer box; cells have only a Delete button.
 - **Tutor tools.** `read_notebook` returns the learner's cells and outputs. `compute_answer` runs
   setup plus reference so the tutor can check a generated question before posing it.
 
@@ -30,7 +30,7 @@ The learner-facing guide lives in the vault, at `~/avidya/courses/mlp/oppe-1/exa
 | Side-docked surfaces (`placement: "side"`) | `src/core/plugin-ui.ts`, `components/plugin-surface-shell.tsx`, `components/plugin-ui-host.tsx` |
 | Dock keeps its own keys (Enter/Escape, Mod+Enter) | `plugin-surface-shell.tsx` (stopPropagation), `components/plugin-question-keys.ts` (capture skip) |
 | Teaching Submit hook for the notebook | `data-testid="plugin-question-send"` in `components/plugin-question-dock.tsx` (practice uses `practice-send`) |
-| Notebook UI, seeding, cell Submit, cell value | `plugins/coding-questions/src/notebook/{entry,view,controller,outputs,cell-editor}.ts` |
+| Notebook UI, seeding | `plugins/coding-questions/src/notebook/{entry,view,controller,outputs,cell-editor}.ts` |
 | Kernel bridge (jupyter_client over JSON lines) | `plugins/coding-questions/src/kernel-bridge.py`, `kernels.ts` |
 | Answer targets (editor ⇄ notebook) | `plugins/coding-questions/src/answer-targets.ts` (`accepts: "value"` for exam questions) |
 | Exam question contract, parsing, tolerance, reference runner | `plugins/coding-questions/src/value.ts` |
