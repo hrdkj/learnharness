@@ -206,7 +206,8 @@
 .lh-nb-rendered { padding: 0.25rem 0.6rem; cursor: text; }
 .lh-nb-docs { margin: 0.35rem 0 0; padding: 0.5rem 0.75rem; max-height: 18rem; overflow: auto; border-left: 2px solid #61afef; background: var(--nb-card); color: var(--nb-fg); font: 12px/1.45 var(--font-mono, monospace); white-space: pre-wrap; }
 .lh-nb-outputs:empty { display: none; }
-.lh-nb-outputs { margin-top: 0.3rem; padding: 0.2rem 0.6rem; overflow-x: auto; }
+/* Long outputs (help(), big prints) scroll in their own box, like Colab, instead of stretching the cell. */
+.lh-nb-outputs { margin-top: 0.3rem; padding: 0.2rem 0.6rem; max-height: min(60vh, 30rem); overflow: auto; scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--nb-fg) 25%, transparent) transparent; }
 .lh-nb-output pre { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font: 12.5px/1.45 var(--font-mono, monospace); color: var(--nb-fg); }
 .lh-nb-output + .lh-nb-output { margin-top: 0.25rem; }
 .lh-nb-output img { max-width: 100%; background: #fff; border-radius: 0.25rem; }
