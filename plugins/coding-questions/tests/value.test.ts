@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import { it } from "node:test";
-import { compareValue, parseNumber, readReferenceOutput, referenceProgram, valueProblemDefinition } from "../src/value.ts";
+import { compareValue, DONT_KNOW, parseNumber, readValueResult, readReferenceOutput, referenceProgram, valueProblemDefinition } from "../src/value.ts";
 
 it("reads numbers the way people paste them from a notebook", () => {
   assert.equal(parseNumber("0.386"), 0.386);
@@ -25,6 +25,15 @@ it("checks numbers within tolerance and text/options loosely", () => {
   const choice = { answerType: "choice" as const, options: ["Age", "BMI"] };
   assert.equal(compareValue(choice, "BMI", " bmi ").status, "correct");
   assert.equal(compareValue({ answerType: "text" }, "GlucoseLevel", "'glucoselevel'").status, "correct");
+});
+
+it("grades I don't know as its own status, for every answer type", () => {
+  for (const payload of [{ answerType: "number" as const }, { answerType: "text" as const }, { answerType: "choice" as const, options: ["a", "b"] }]) {
+    const result = compareValue(payload, payload.answerType === "number" ? 42 : "a", ` ${DONT_KNOW} `);
+    assert.equal(result.status, "dont_know");
+    assert.equal(readValueResult(result)?.status, "dont_know");
+  }
+  assert.equal(compareValue({ answerType: "text" }, "a", "I don't") .status, "incorrect");
 });
 
 it("validates the pose: a key or a reference, options for choice", () => {

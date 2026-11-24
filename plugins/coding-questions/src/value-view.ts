@@ -1,6 +1,6 @@
 import type { PluginFrontendContext, PluginProblemEditorHandle, PluginProblemEditorProps, PluginQuestionAnswerState, PluginQuestionEditorHandle, PluginQuestionEditorProps } from "learnharness-plugin-api";
 import { openNotebookFor, registerAnswerTarget, answerTargetsChanged, type AnswerTarget } from "./answer-targets.ts";
-import { readValueResult, type ValuePayload, type ValueQuestionPayload, type ValueResult } from "./value.ts";
+import { DONT_KNOW, isDontKnow, readValueResult, type ValuePayload, type ValueQuestionPayload, type ValueResult } from "./value.ts";
 
 function valueOf(answer: PluginQuestionAnswerState): string {
   return answer.status === "empty" || typeof answer.value !== "string" ? "" : answer.value;
@@ -37,6 +37,15 @@ function mountValueEditor(container: HTMLElement, props: {
 
   let input: HTMLInputElement | undefined;
   const radios: HTMLInputElement[] = [];
+  // "I don't know": a toggle that sends DONT_KNOW instead of a value, like the
+  // quiz option. The typed value is kept, so switching back restores it.
+  let typed = isDontKnow(current) ? "" : current;
+  const dontKnow = document.createElement("button");
+  dontKnow.type = "button";
+  dontKnow.className = "lh-value__dont-know";
+  dontKnow.textContent = DONT_KNOW;
+  dontKnow.title = "Mark this as a gap; the tutor will hint at the first step";
+  const dontKnowOn = () => isDontKnow(current);
   if (props.payload.answerType === "choice") {
     const list = document.createElement("div");
     list.className = "lh-value__options";
@@ -47,7 +56,7 @@ function mountValueEditor(container: HTMLElement, props: {
       const radio = document.createElement("input");
       radio.type = "radio"; radio.name = name; radio.value = option;
       radio.checked = option === current;
-      radio.addEventListener("change", () => { if (radio.checked) publish(option); });
+      radio.addEventListener("change", () => { if (radio.checked) { typed = option; publish(option); setEditable(); } });
       const text = document.createElement("span");
       text.textContent = option;
       row.append(radio, text);
@@ -64,7 +73,7 @@ function mountValueEditor(container: HTMLElement, props: {
     input.autocomplete = "off"; input.spellcheck = false;
     input.value = current;
     input.setAttribute("aria-label", "Answer value");
-    input.addEventListener("input", () => publish(input!.value));
+    input.addEventListener("input", () => { typed = input!.value; publish(typed); });
     root.append(input);
     const hint = document.createElement("div");
     hint.className = "lh-value__hint";
@@ -72,12 +81,22 @@ function mountValueEditor(container: HTMLElement, props: {
       ? "Compute it in the notebook, then type the number. Enter submits." : "Enter submits.";
     root.append(hint);
   }
+  root.append(dontKnow);
   container.append(root);
 
-  const setEditable = () => {
-    if (input) input.disabled = !active;
-    for (const radio of radios) radio.disabled = !active;
-  };
+  function setEditable() {
+    const off = dontKnowOn();
+    if (input) { input.disabled = !active || off; input.value = off ? "" : typed; }
+    for (const radio of radios) { radio.disabled = !active || off; radio.checked = !off && radio.value === typed; }
+    dontKnow.disabled = !active;
+    dontKnow.setAttribute("aria-pressed", String(off));
+  }
+  dontKnow.addEventListener("click", () => {
+    if (disposed || !active) return;
+    publish(dontKnowOn() ? typed : DONT_KNOW);
+    setEditable();
+    if (!dontKnowOn()) target.focus();
+  });
   setEditable();
 
   const target: AnswerTarget = {
@@ -87,11 +106,11 @@ function mountValueEditor(container: HTMLElement, props: {
     isActive: () => !disposed && active && !props.signal.aborted,
     setCode(value) {
       if (disposed || !active) return;
-      if (input) input.value = value;
-      for (const radio of radios) radio.checked = radio.value === value;
+      if (!isDontKnow(value)) typed = value;
       publish(value);
+      setEditable();
     },
-    focus() { if (!disposed && active) (input ?? radios.find(radio => radio.checked) ?? radios[0])?.focus(); },
+    focus() { if (!disposed && active) (dontKnowOn() ? dontKnow : input ?? radios.find(radio => radio.checked) ?? radios[0])?.focus(); },
   };
   const unregister = registerAnswerTarget(target);
   notebook.addEventListener("click", () => { if (!disposed) openNotebookFor(target); });
@@ -161,7 +180,7 @@ export function mountValueSubmitted(container: HTMLElement, ui: Pick<PluginFront
     note.textContent = result?.message ?? (outcome as { error: string }).error;
     root.append(note);
   }
-  if (result && result.status === "incorrect" && options.revealExpected && result.expected !== undefined) {
+  if (result && (result.status === "incorrect" || result.status === "dont_know") && options.revealExpected && result.expected !== undefined) {
     const expected = document.createElement("p");
     expected.className = "lh-value__hint";
     expected.textContent = `Correct answer: ${format(result.expected)}${result.tolerance ? ` (±${format(result.tolerance)})` : ""}`;
@@ -172,7 +191,7 @@ export function mountValueSubmitted(container: HTMLElement, ui: Pick<PluginFront
   (options.headerContainer ?? root).append(badgeRoot);
   const status = result?.status ?? "error";
   const badge = ui.mountBadge(badgeRoot, {
-    text: status === "correct" ? "Correct" : status === "incorrect" ? "Incorrect" : status === "invalid" ? "Not a valid answer" : "Could not check",
+    text: status === "correct" ? "Correct" : status === "incorrect" ? "Incorrect" : status === "dont_know" ? "Didn't know" : status === "invalid" ? "Not a valid answer" : "Could not check",
     ...(status === "correct" ? { color: "var(--color-green-500, #22c55e)" } : status === "incorrect" ? { color: "var(--color-red-500, #ef4444)" } : {}),
   }, { signal });
   let disposed = false;

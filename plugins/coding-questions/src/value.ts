@@ -18,8 +18,12 @@ export type ValuePayload = {
 };
 export type ValueQuestionPayload = ValuePayload & { modelSolution: string };
 
+/** What the answer box sends when the learner picks "I don't know". */
+export const DONT_KNOW = "I don't know";
+export function isDontKnow(raw: string): boolean { return raw.trim() === DONT_KNOW; }
+
 export type ValueResult = {
-  status: "correct" | "incorrect" | "invalid" | "error";
+  status: "correct" | "incorrect" | "invalid" | "error" | "dont_know";
   submitted: string;
   expected?: ValueAnswer;
   tolerance?: number;
@@ -44,7 +48,7 @@ const payloadSchema = {
   tolerance: { type: "number", minimum: 0, description: "Absolute tolerance for number answers. Defaults to 0 for integer answers and 0.01 otherwise. Match the question's rounding instruction." },
 } as const;
 
-const valueInstructions = "Use exam questions for OPPE/SEEK-style practice where only the final value matters: the learner computes it in the docked notebook (code is never graded) and types a number, picks an option or types a short name. Supply payload.answerType, options for choice, notebookSetup that loads the dataset, and either answer (a known key, e.g. from a paper's answer sheet) or reference (Python that assigns `answer`, for generated or harder variants; always call compute_answer with the same notebookSetup and reference first to check it runs and the value is sensible). State any rounding in the question and set tolerance to match. Each submission returns correct/incorrect with the expected value for you only; never reveal the expected value or the method before the learner gets it right or asks to give up. When an answer is wrong, call read_notebook, find the exact cell where their approach diverges (wrong filter, missed sentinel such as 'UNKNOWN' or -1, fitting on all data, wrong split/random_state, wrong metric or sign, rounding) and give one targeted hint quoting their code. Keep the CPU light: prefer the provided CSVs, avoid huge grids.";
+const valueInstructions = "Use exam questions for OPPE/SEEK-style practice where only the final value matters: the learner computes it in the docked notebook (code is never graded) and types a number, picks an option or types a short name. Supply payload.answerType, options for choice, notebookSetup that loads the dataset, and either answer (a known key, e.g. from a paper's answer sheet) or reference (Python that assigns `answer`, for generated or harder variants; always call compute_answer with the same notebookSetup and reference first to check it runs and the value is sensible). State any rounding in the question and set tolerance to match. Each submission returns correct/incorrect with the expected value for you only; status dont_know means the learner chose 'I don't know': treat it as an honest gap, not a wrong guess. Do not reveal the value: name the first step of the method (which column, filter or function), let them try again, and give more only as they need it; never reveal the expected value or the method before the learner gets it right or asks to give up. When an answer is wrong, call read_notebook, find the exact cell where their approach diverges (wrong filter, missed sentinel such as 'UNKNOWN' or -1, fitting on all data, wrong split/random_state, wrong metric or sign, rounding) and give one targeted hint quoting their code. Keep the CPU light: prefer the provided CSVs, avoid huge grids.";
 
 export const valueTeachInstructions = "When a check calls for computing a value from data, you may use exam_question. " + valueInstructions;
 export const valuePracticeInstructions = "For data-analysis/ML practice (e.g. IITM MLP OPPE) prefer exam_problem over coding_problem. " + valueInstructions + " Use the existing conclude tool after the learner gets it right (or gives up); put the full working code in modelSolution.";
@@ -132,6 +136,7 @@ export function defaultTolerance(expected: number): number {
 
 export function compareValue(payload: ValuePayload, expected: ValueAnswer, submittedRaw: string): ValueResult {
   const submitted = submittedRaw.trim();
+  if (isDontKnow(submitted)) return { status: "dont_know", submitted, expected };
   if (payload.answerType === "number") {
     const value = parseNumber(submitted);
     const target = typeof expected === "number" ? expected : parseNumber(expected);
@@ -185,7 +190,7 @@ export function readReferenceOutput(stdout: string): { answer: ValueAnswer } | {
 export function readValueResult(value: unknown): ValueResult | null {
   const result = record(value);
   if (!result) return null;
-  if (result.status !== "correct" && result.status !== "incorrect" && result.status !== "invalid" && result.status !== "error") return null;
+  if (result.status !== "correct" && result.status !== "incorrect" && result.status !== "invalid" && result.status !== "error" && result.status !== "dont_know") return null;
   if (typeof result.submitted !== "string") return null;
   return result as unknown as ValueResult;
 }
