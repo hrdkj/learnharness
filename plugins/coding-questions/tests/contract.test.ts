@@ -37,7 +37,7 @@ test("teacher question and practice problem register separately with role-scoped
   assert.equal((calls[5] as { id: string; processSubmission: unknown }).id, "value");
   const tools = calls[6] as { agents: string[]; create(context: { chatId: string; agent: string }): { name: string }[] };
   assert.deepEqual(tools.agents, ["teacher", "practice"]);
-  assert.deepEqual(tools.create({ chatId: "fixture", agent: "teacher" }).map(tool => tool.name), ["compute_answer", "read_notebook"]);
+  assert.deepEqual(tools.create({ chatId: "fixture", agent: "teacher" }).map(tool => tool.name), ["compute_answer", "reset_notebook", "read_notebook"]);
   assert.equal(definition.teach.toolName, "coding_question");
   assert.equal("probe" in definition, false);
   assert.equal("execute" in definition, false);

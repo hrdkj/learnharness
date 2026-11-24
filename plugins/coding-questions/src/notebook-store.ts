@@ -35,20 +35,35 @@ export class NotebookStore {
     }
   }
 
+  /** Copy the current notebook to notebooks/archive/ before a reset. Returns the copy, or undefined if there was none. */
+  archive(sessionId: string): string | undefined {
+    const file = this.file(sessionId);
+    if (!fs.existsSync(file)) return undefined;
+    const copy = path.join(this.dataDirectory, "notebooks", "archive", `${sessionId}-${new Date().toISOString().replace(/[:.]/g, "-")}.ipynb`);
+    fs.mkdirSync(path.dirname(copy), { recursive: true });
+    fs.copyFileSync(file, copy);
+    return copy;
+  }
+
   save(sessionId: string, value: unknown): void {
     const notebook = parseNotebook(value);
     atomicWrite(this.file(sessionId), JSON.stringify(toIpynb(notebook), null, 1) + "\n");
   }
 }
 
-export interface NotebookSettings { python: string }
+export interface NotebookSettings {
+  python: string;
+  /** Whether the tutor may start a fresh notebook (reset_notebook). */
+  tutorReset: boolean;
+}
+const DEFAULT_SETTINGS: NotebookSettings = { python: "", tutorReset: true };
 
 export function readSettings(dataDirectory: string): NotebookSettings {
   try {
     const value = JSON.parse(fs.readFileSync(path.join(dataDirectory, "settings.json"), "utf8")) as Record<string, unknown>;
-    return { python: typeof value.python === "string" ? value.python : "" };
+    return { python: typeof value.python === "string" ? value.python : "", tutorReset: value.tutorReset !== false };
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return { python: "" };
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return { ...DEFAULT_SETTINGS };
     throw error;
   }
 }

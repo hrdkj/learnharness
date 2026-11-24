@@ -33,6 +33,7 @@ export function activateNotebook(ctx: PluginFrontendContext): () => void {
   let open: { sessionId: string; handle?: PluginWidgetHandle<PluginSurfaceProps>; controller: AbortController } | undefined;
   let settingsHandle: PluginWidgetHandle<PluginSettingsSchema> | undefined;
   let python = "";
+  let tutorReset = true;
   const cleanups: (() => void)[] = [];
 
   const controllerFor = (sessionId: string) => {
@@ -102,6 +103,15 @@ export function activateNotebook(ctx: PluginFrontendContext): () => void {
       python = saved.python;
       settingsHandle?.update({ rows: rows() });
     },
+  }, {
+    key: "tutor-reset", type: "toggle", label: "Tutor can start a fresh notebook",
+    description: "When you move to a new paper or mock test, the tutor clears the notebook and restarts the kernel. The old notebook is archived, not deleted.",
+    value: tutorReset,
+    async onChange(value: boolean) {
+      const saved = await ctx.call<{ tutorReset: boolean }>("set-tutor-reset", { enabled: value });
+      tutorReset = saved.tutorReset;
+      settingsHandle?.update({ rows: rows() });
+    },
   }];
 
   cleanups.push(ctx.onNotification(event => {
@@ -109,16 +119,20 @@ export function activateNotebook(ctx: PluginFrontendContext): () => void {
     const data = record(event.data);
     if (event.topic === "kernel" && data && typeof data.sessionId === "string") {
       controllers.get(data.sessionId)?.handle(data.event as Parameters<NotebookController["handle"]>[0]);
+    } else if (event.topic === "notebook-reset" && data && typeof data.sessionId === "string") {
+      void controllers.get(data.sessionId)?.reload().catch(error => console.error("Coding questions: could not reload the notebook.", error));
     } else if (event.topic === "settings-changed" && data && typeof data.python === "string") {
       python = data.python;
+      if (typeof data.tutorReset === "boolean") tutorReset = data.tutorReset;
       settingsHandle?.update({ rows: rows() });
     }
   }));
   cleanups.push(ctx.registerAction(action));
   cleanups.push(ctx.placeAction({ id: "session-notebook", actionId: "notebook", location: "top-bar", sessions: ["teaching", "practice"] }));
-  void ctx.call<{ python: string }>("get-settings").then(value => {
+  void ctx.call<{ python: string; tutorReset?: boolean }>("get-settings").then(value => {
     if (ctx.signal.aborted) return;
     python = value.python;
+    tutorReset = value.tutorReset !== false;
     settingsHandle = ctx.registerSettings({ rows: rows() });
   }).catch(error => console.error("Coding questions: could not read notebook settings.", error));
 

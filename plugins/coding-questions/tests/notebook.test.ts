@@ -8,6 +8,9 @@ import { test } from "node:test";
 import { fromIpynb, notebookAsText, parseNotebook, toIpynb, type Notebook } from "../src/notebook-model.ts";
 import { NotebookStore, pythonPathError } from "../src/notebook-store.ts";
 import { Kernels, type BridgeEvent } from "../src/kernels.ts";
+import type { PluginBackendContext } from "learnharness-plugin-api";
+import { activate } from "../src/backend.ts";
+import { notebookHost } from "./notebook-host.ts";
 
 const sample: Notebook = {
   seeded: ["problem-1"],
@@ -74,6 +77,43 @@ test("the store writes one ipynb per session and never escapes its folder", asyn
   assert.ok(fs.existsSync(path.join(dataDirectory, "notebooks", "session-1.ipynb")));
   assert.deepEqual(store.load("session-1"), sample);
   assert.throws(() => store.file("../escape"), /Invalid session id/);
+});
+
+test("reset_notebook archives the old notebook, starts a fresh one and obeys the setting", async t => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), "lh-nb-reset-"));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const store = new NotebookStore(dir), events: unknown[] = [];
+  store.save("chat1", { cells: [{ id: "a", type: "code", source: "x = 1", outputs: [], executionCount: 1 }], seeded: ["p1"] });
+  let tools: { create(context: { chatId: string; agent: string }): { name: string; execute(id: string, input: unknown): Promise<{ content: { text: string }[] }> }[] } | undefined;
+  const cleanup = activate({
+    ...notebookHost({ dataDirectory: dir }),
+    events: { emit: (topic: string, data: unknown) => events.push({ topic, data }) },
+    registerTools(value: typeof tools) { tools = value; return () => {}; },
+    registerQuestionType: () => () => {}, registerProblemType: () => () => {}, registerInstructions: () => () => {},
+  } as unknown as PluginBackendContext);
+  t.after(cleanup);
+  const reset = tools!.create({ chatId: "chat1", agent: "practice" }).find(tool => tool.name === "reset_notebook")!;
+  const reply = await reset.execute("call", { title: "Mock paper 2" });
+  assert.match(reply.content[0]!.text, /Fresh notebook ready/);
+  const fresh = store.load("chat1");
+  assert.deepEqual(fresh.seeded, []);
+  assert.deepEqual(fresh.cells.map(cell => [cell.type, cell.source]), [["markdown", "# Mock paper 2"], ["code", ""]]);
+  const archived = fs.readdirSync(path.join(dir, "notebooks", "archive"));
+  assert.equal(archived.length, 1);
+  assert.match(fs.readFileSync(path.join(dir, "notebooks", "archive", archived[0]!), "utf8"), /x = 1/);
+  assert.deepEqual(events, [{ topic: "notebook-reset", data: { sessionId: "chat1" } }]);
+  fs.writeFileSync(path.join(dir, "settings.json"), JSON.stringify({ python: "", tutorReset: false }));
+  cleanup();
+  const cleanup2 = activate({
+    ...notebookHost({ dataDirectory: dir }),
+    registerTools(value: typeof tools) { tools = value; return () => {}; },
+    registerQuestionType: () => () => {}, registerProblemType: () => () => {}, registerInstructions: () => () => {},
+  } as unknown as PluginBackendContext);
+  t.after(cleanup2);
+  store.save("chat1", { cells: [{ id: "b", type: "code", source: "y = 2", outputs: [], executionCount: null }], seeded: [] });
+  const refused = await tools!.create({ chatId: "chat1", agent: "practice" }).find(tool => tool.name === "reset_notebook")!.execute("call", {});
+  assert.match(refused.content[0]!.text, /Not reset/);
+  assert.equal(store.load("chat1").cells[0]!.source, "y = 2");
 });
 
 test("Notebook Python accepts PATH commands and existing absolute files only", () => {

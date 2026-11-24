@@ -53,6 +53,19 @@ export class NotebookController {
     this.emit({ structure: true });
   }
 
+  /** The backend replaced the notebook (tutor reset): drop local state and reload. */
+  async reload(): Promise<void> {
+    clearTimeout(this.saveTimer);
+    this.queue = [];
+    this.running = undefined;
+    this.early = [];
+    this.deleted = [];
+    this.runState.clear();
+    this.message = "";
+    this.loaded = this.load();
+    await this.loaded;
+  }
+
   subscribe(listener: (change: { cellId?: string; structure?: boolean }) => void): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);

@@ -18,8 +18,12 @@ describes what was actually built.
   correct value is either `payload.answer` (a stored key) or `payload.reference` (Python that assigns
   `answer`, run after `notebookSetup` in a fresh Notebook Python process on the first submit and
   cached). The learner types the value into the answer box; cells have only a Delete button.
+  An **I don't know** toggle sends a fixed value graded as `dont_know`; the tutor hints at the
+  first step instead of revealing the value.
 - **Tutor tools.** `read_notebook` returns the learner's cells and outputs. `compute_answer` runs
   setup plus reference so the tutor can check a generated question before posing it.
+  `reset_notebook` archives the notebook to `notebooks/archive/`, writes an empty one and stops the
+  kernel, for a new paper; the settings toggle "Tutor can start a fresh notebook" turns it off.
 
 The learner-facing guide lives in the vault, at `~/avidya/courses/mlp/oppe-1/exam-practice.md`.
 

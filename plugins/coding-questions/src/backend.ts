@@ -110,6 +110,14 @@ export function activate(ctx: PluginBackendContext): () => void {
       ctx.events.emit("settings-changed", { ...settings });
       return { ...settings };
     }),
+    ctx.handle("set-tutor-reset", input => {
+      const enabled = field(input, "enabled");
+      if (typeof enabled !== "boolean") throw new Error("Expected enabled to be a boolean.");
+      settings = { ...settings, tutorReset: enabled };
+      writeSettings(ctx.dataDirectory, settings);
+      ctx.events.emit("settings-changed", { ...settings });
+      return { ...settings };
+    }),
     ctx.handle("notebook-load", input => {
       const sessionId = sessionIdFrom(input);
       return { notebook: store.load(sessionId), kernel: kernels.state(sessionId) };
@@ -153,6 +161,34 @@ export function activate(ctx: PluginBackendContext): () => void {
         const result = await computeReference(typeof setup === "string" ? setup : "", reference, signal);
         const text = "answer" in result ? `answer = ${JSON.stringify(result.answer)}` : `Error: ${result.error}`;
         return { content: [{ type: "text" as const, text }], details: {} };
+      },
+    }, {
+      name: "reset_notebook",
+      label: "Fresh notebook",
+      description: "Start the learner on a fresh, empty notebook for this session: the current notebook is archived (not deleted) and the kernel is stopped, so every variable and import is cleared. Use it when the learner moves to a new paper or mock test, or asks for a clean notebook; never in the middle of a question. Afterwards pose the next question with notebookSetup so its data loads again.",
+      parameters: {
+        type: "object",
+        properties: { title: { type: "string", description: "Optional heading for the first cell, e.g. 'Mock paper 2'." } },
+        additionalProperties: false,
+      },
+      execute: async (_toolCallId: string, input: unknown, signal?: AbortSignal) => {
+        if (signal?.aborted || ctx.signal.aborted) throw new Error("Notebook reset cancelled.");
+        const reply = (text: string) => ({ content: [{ type: "text" as const, text }], details: {} });
+        if (!settings.tutorReset) return reply("Not reset: the learner turned off 'Tutor can start a fresh notebook' in the Coding questions settings. Ask them to clear the notebook themselves if they want a clean one.");
+        if (!SESSION_ID_SAFE.test(context.chatId)) return reply("No notebook is available for this session.");
+        const title = field(input, "title");
+        const heading = typeof title === "string" ? title.trim().replace(/\s+/g, " ").slice(0, 120) : "";
+        const archived = store.archive(context.chatId);
+        store.save(context.chatId, {
+          cells: heading ? [
+            { id: `r${Date.now().toString(36)}h`, type: "markdown", source: `# ${heading}`, outputs: [], executionCount: null },
+            { id: `r${Date.now().toString(36)}c`, type: "code", source: "", outputs: [], executionCount: null },
+          ] : [],
+          seeded: [],
+        });
+        kernels.shutdown(context.chatId);
+        ctx.events.emit("notebook-reset", { sessionId: context.chatId });
+        return reply(`Fresh notebook ready${heading ? ` ("${heading}")` : ""}; the kernel was stopped, so nothing from before is defined.${archived ? " The previous notebook was archived." : ""} Pose the next question with notebookSetup so its data loads.`);
       },
     }, {
       name: "read_notebook",
