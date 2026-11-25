@@ -191,6 +191,59 @@ body {
    invalid at computed-value time and max-width falls back to none. */
 .lh-transcript-column {
 	max-width: calc(var(--lh-transcript-max) + 1rem);
+	/* Breakout (personal): with the text column capped, wide blocks may grow
+	   to --lh-wide-w (72rem, never past the session's px-6 edge), centered
+	   on the column. cqw resolves against .lh-transcript-scope (the
+	   scroller's content box). --lh-text-w is the column's content width;
+	   at Full the fallback makes both widths equal and every margin 0. */
+	--lh-text-w: min(var(--lh-transcript-max, 1000rem) - 2rem, 100cqw - 3rem);
+	--lh-wide-w: max(var(--lh-text-w), min(72rem, 100cqw - 3rem));
+	--lh-wide-out: calc((var(--lh-wide-w) - var(--lh-text-w)) / 2);
+}
+.lh-transcript-scope {
+	container-type: inline-size;
+}
+/* MessageContent clips (overflow-hidden); clip instead, with room for the
+   breakout band on each side. */
+.lh-transcript-column .lh-message-content {
+	overflow: clip;
+	overflow-clip-margin: var(--lh-wide-out);
+}
+/* The breakout band: the block's box spans --lh-wide-w, centered. Only
+   top-level blocks (the margin math assumes a text-width parent): lesson
+   prose's own blocks, the plan, and figures not nested in a card. */
+.lh-transcript-column :is(
+	.lh-source-passage > .lh-prose > :is(
+		[data-testid="md-table"],
+		[data-testid="md-mermaid"],
+		[data-testid="md-math"]
+	),
+	[data-testid="plan-block-full"],
+	.lh-wide-figure:not(:is(.bg-card, .bg-muted) .lh-wide-figure)
+) {
+	margin-inline: calc(-1 * var(--lh-wide-out));
+	width: auto;
+	max-width: none;
+}
+/* Tables hug their content inside the band: the scroller is at least the
+   text width (so a narrow table keeps the text's left edge) and centered. */
+.lh-transcript-column .lh-source-passage > .lh-prose > [data-testid="md-table"] {
+	display: flex;
+	justify-content: center;
+}
+.lh-transcript-column .lh-source-passage > .lh-prose > [data-testid="md-table"] > .overflow-x-auto {
+	width: max-content;
+	min-width: var(--lh-text-w);
+	max-width: 100%;
+}
+/* Figures stay centered; they just may grow past the text width. */
+.lh-wide-figure {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+}
+.lh-wide-figure > [data-testid="visual-card"].w-full {
+	align-self: stretch;
 }
 
 /* Session-name weight (owner, fix wave round 3): with the serif toggle

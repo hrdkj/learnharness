@@ -102,7 +102,7 @@ export function VisualOutputCard({
 		   ROW below: "Figure" left, the controls right, both edges following
 		   the IMAGE's own width (the wrapper carries the natural-sizing law,
 		   so the row hugs a centered narrow figure, not the column). */
-		<div
+		<div className="lh-wide-figure"><div
 			className={
 				!invertible || natural !== null
 					? "my-4 mx-auto w-fit max-w-full"
@@ -177,6 +177,6 @@ export function VisualOutputCard({
 					)}
 				</div>
 			</div>
-		</div>
+		</div></div>
 	);
 }

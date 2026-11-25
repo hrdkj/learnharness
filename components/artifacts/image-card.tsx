@@ -76,7 +76,7 @@ export function ImagePresentation({ image }: { image: ImageSnapshot & Pick<ShowI
 		/* Auto dimensions let the width/60vh constraints scale the whole picture
 		   proportionally, never enlarge it. The wrapper hugs its displayed width;
 		   w-0 + min-w-full keeps the caption from widening the card. */
-		<figure className="my-4 mx-auto w-fit max-w-full" data-testid="image-card">
+		<div className="lh-wide-figure"><figure className="my-4 mx-auto w-fit max-w-full" data-testid="image-card">
 			<div className="w-fit max-w-full overflow-hidden rounded-lg">
 				{/* An in-memory image from the record; no Next image optimization. */}
 				{/* eslint-disable-next-line @next/next/no-img-element */}
@@ -123,6 +123,6 @@ export function ImagePresentation({ image }: { image: ImageSnapshot & Pick<ShowI
 					)}
 				</div>
 			</figcaption>
-		</figure>
+		</figure></div>
 	);
 }

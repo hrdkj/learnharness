@@ -1770,7 +1770,7 @@ export function Chat({
 				<Conversation className="h-full min-w-0 flex-1" initial="instant" contextRef={scrollContextRef}>
 					<SessionMessageNavigation />
 					<TranscriptElementReporter onElement={setTranscriptElement} />
-					<ConversationContent className="min-h-full gap-0 p-0">
+					<ConversationContent className="lh-transcript-scope min-h-full gap-0 p-0">
 						<div data-session-find-root="" className={`${COLUMN} flex flex-1 flex-col gap-4 pt-4`}>
 							{messages.length === 0 && !busy && (
 								<ConversationEmptyState
@@ -1898,7 +1898,7 @@ export function Chat({
 											</div>
 									) : (
 									<Message from="assistant" className="max-w-full" data-older-transcript-row={mi < newestTurnFrom ? "" : undefined}>
-									<MessageContent className="w-full">
+									<MessageContent className="lh-message-content w-full">
 											{m.parts.map((part, pi) => {
 												if (part.pluginProblem) return <ProblemCard key={pi} part={{ ...part, state: part.state ?? "input-available", toolCallId: part.toolCallId ?? "" }} />;
 												if (part.pluginQuestion) return <PluginQuestionPart key={pi} part={part} chatId={chatId} />;
