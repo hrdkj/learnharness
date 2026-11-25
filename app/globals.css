@@ -192,36 +192,43 @@ body {
 .lh-transcript-column {
 	max-width: calc(var(--lh-transcript-max) + 1rem);
 	/* Breakout (personal): with the text column capped, wide blocks may grow
-	   to --lh-wide-w (72rem, never past the session's px-6 edge), centered
-	   on the column. cqw resolves against .lh-transcript-scope (the
-	   scroller's content box). --lh-text-w is the column's content width;
-	   at Full the fallback makes both widths equal and every margin 0. */
+	   past it, centered on the column and never past the session's px-6
+	   edge: tables and math up to 72rem, diagrams (mermaid, the plan, SVG
+	   and image figures) up to the whole session width. cqw resolves against
+	   .lh-transcript-scope (the scroller's content box). --lh-text-w is the
+	   column's content width; at Full the fallback makes every width equal
+	   and every margin 0. */
 	--lh-text-w: min(var(--lh-transcript-max, 1000rem) - 2rem, 100cqw - 3rem);
-	--lh-wide-w: max(var(--lh-text-w), min(72rem, 100cqw - 3rem));
-	--lh-wide-out: calc((var(--lh-wide-w) - var(--lh-text-w)) / 2);
+	--lh-wide-out: calc((max(var(--lh-text-w), min(72rem, 100cqw - 3rem)) - var(--lh-text-w)) / 2);
+	--lh-full-out: calc((100cqw - 3rem - var(--lh-text-w)) / 2);
 }
 .lh-transcript-scope {
 	container-type: inline-size;
 }
-/* MessageContent clips (overflow-hidden); clip instead, with room for the
-   breakout band on each side. */
+/* MessageContent clips (overflow-hidden), which would cut the breakout
+   band off at the text edges. */
 .lh-transcript-column .lh-message-content {
-	overflow: clip;
-	overflow-clip-margin: var(--lh-wide-out);
+	overflow: visible;
 }
-/* The breakout band: the block's box spans --lh-wide-w, centered. Only
+/* The breakout band: the block's box spans the wider width, centered. Only
    top-level blocks (the margin math assumes a text-width parent): lesson
    prose's own blocks, the plan, and figures not nested in a card. */
 .lh-transcript-column :is(
 	.lh-source-passage > .lh-prose > :is(
 		[data-testid="md-table"],
-		[data-testid="md-mermaid"],
 		[data-testid="md-math"]
-	),
+	)
+) {
+	margin-inline: calc(-1 * var(--lh-wide-out));
+	width: auto;
+	max-width: none;
+}
+.lh-transcript-column :is(
+	.lh-source-passage > .lh-prose > [data-testid="md-mermaid"],
 	[data-testid="plan-block-full"],
 	.lh-wide-figure:not(:is(.bg-card, .bg-muted) .lh-wide-figure)
 ) {
-	margin-inline: calc(-1 * var(--lh-wide-out));
+	margin-inline: calc(-1 * var(--lh-full-out));
 	width: auto;
 	max-width: none;
 }
