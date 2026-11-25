@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { ConfidenceRail } from "@/components/confidence-rail";
 import { GlyphMark } from "@/components/ui/glyph-mark";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -30,47 +30,6 @@ function scrollParent(el: HTMLElement): HTMLElement | null {
 	return null;
 }
 
-// ── The Ctrl/⌘Y "Toggle all Why" store (module scope, persisted) ───────────
-// null = every card runs its own collapsed default. An explicit set opens or
-// closes EVERY Why (stomping per-card clicks, like ⌘T for thinking) and is
-// remembered in localStorage across reloads and restarts.
-const WHY_STORAGE_KEY = "lh:answered-why-open";
-let allWhyOpen: boolean | null | undefined; // undefined = storage not read yet
-const whyListeners = new Set<(open: boolean) => void>();
-
-function storedWhyOpen(): boolean | null {
-	if (allWhyOpen !== undefined) return allWhyOpen;
-	try {
-		const value = window.localStorage.getItem(WHY_STORAGE_KEY);
-		allWhyOpen = value === "1" ? true : value === "0" ? false : null;
-	} catch {
-		allWhyOpen = null;
-	}
-	return allWhyOpen;
-}
-
-export function currentWhyOpen(): boolean {
-	return storedWhyOpen() ?? false;
-}
-
-export function setAllWhyOpen(open: boolean) {
-	allWhyOpen = open;
-	try {
-		window.localStorage.setItem(WHY_STORAGE_KEY, open ? "1" : "0");
-	} catch {
-		// Storage unavailable: the set still applies for this page load.
-	}
-	for (const l of whyListeners) l(open);
-}
-
-/** Subscribe a card; a remembered set applies immediately on mount. */
-function subscribeWhyOpen(fn: (open: boolean) => void): () => void {
-	whyListeners.add(fn);
-	const open = storedWhyOpen();
-	if (open !== null) fn(open);
-	return () => whyListeners.delete(fn);
-}
-
 /**
  * Static rendering of an answered question (tool part in `output-available`).
  *
@@ -85,10 +44,6 @@ export function AnsweredCard({ answer: savedAnswer, input, toolCallId }: { answe
 	const answer = answerForPresentation(savedAnswer, input);
 	const optionLetters = answeredOptionLetters(savedAnswer, input);
 	const [whyOpen, setWhyOpen] = useState(false); // the tucked explanation (predictions, owner 2026-10-03)
-	// Ctrl/⌘Y sets every card; read post-mount (SSR renders collapsed) but
-	// before paint, so a remembered "open" never flashes closed.
-	useLayoutEffect(() => subscribeWhyOpen(setWhyOpen), []);
-
 	// ADAPT QUESTION LAYOUT on the record (owner, session-appearance-layout):
 	// an answered question gets two columns exactly when its question card
 	// did — the same solver, measured on a stand-in of the question card
