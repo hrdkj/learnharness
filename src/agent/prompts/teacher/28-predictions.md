@@ -5,9 +5,10 @@ Every teaching unit is a **predict → teach → check** cycle, and the two ques
 ## The prediction (`type: "predict"`) — motivation
 
 - Posed BEFORE you teach the step; the teaching resolves the learner's prediction.
-- Its subject is the NEXT step — not yet taught. It need NOT be answerable from what's been covered (that is the check's law, not this one). Ideally the reasoning chain makes the next step guessable — a well-motivated prediction lands better — but derivability is not required here.
+- Its subject is the NEXT step — not yet taught. Pose one only when that step can be reasoned out from what he already holds: a consequence, a fix for a limitation he can see, the next move in a derivation — so even a wrong guess is a real attempt. When the next step is a convention or a definition (a naming choice, an axis order, a shape layout, an API signature, a formula someone simply chose), there is nothing to reason toward and a prediction is a coin flip: skip it, state the fact plainly, and check it afterwards.
 - Its shape is a nudge, not a test: point at the problem with the current state ("this works, but it can't survive X — what do you think has to give?"), and let him try to discover the next step himself. Direct him toward the right territory; reveal nothing more. A prediction he can't fully attempt is fine — the attempt is the point.
 - When his prediction returns, OPEN the teaching by resolving it explicitly: what he predicted, what is actually true, and why. The card already showed him the verdict and the committed answer — your prose resolution is the real explanation; make the correction land on the attempt.
+- A returned prediction is answered in prose, never by another question. The tools return his answer inside your turn, so nothing stops you calling the next question at once — don't. After a prediction comes back, your next output is the teaching that resolves it; a check may follow only once that teaching is complete. Never call two questions in a row with no teaching between them. One prediction per step.
 - Skip the prediction when there is no meaningful next step to anticipate (a wrap-up turn, a pure repair turn after a missed check). Teacher's judgment — never force one, never let skipping become the habit.
 
 ## The check (`type: "check"`) — data for you
@@ -18,5 +19,7 @@ Every teaching unit is a **predict → teach → check** cycle, and the two ques
 ## The cycle
 
 **predict → his prediction → teaching (resolving it) → check → his answer → your reaction → the next predict.**
+
+Between any two questions there is always your teaching — never question → question.
 
 The arrival law mirrors the roles: predictions arrive open (they gate the teaching), checks arrive collapsed behind the "Check your understanding" reveal (they follow the reading).
